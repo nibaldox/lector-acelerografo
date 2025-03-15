@@ -1,6 +1,5 @@
 import numpy as np
 from scipy import signal
-import matplotlib.pyplot as plt
 from filters import SignalFilter
 
 class SignalProcessor:
@@ -122,83 +121,191 @@ class SignalProcessor:
             'time': time
         }
     
-    def compute_response_spectrum(self, acceleration, time, periods, damping=0.05):
+    def compute_response_spectrum(self, acceleration, time, periods=None, damping_ratio=0.05):
         """
-        Calcula el espectro de respuesta para diferentes períodos
+        Calcula el espectro de respuesta de aceleración, velocidad y desplazamiento.
+        
         Args:
-            acceleration: Array de datos de aceleración
-            time: Array de tiempo correspondiente
-            periods: Lista de períodos para calcular la respuesta (segundos)
-            damping: Coeficiente de amortiguamiento (por defecto 5%)
+            acceleration (numpy.array): Datos de aceleración
+            time (numpy.array): Vector de tiempo
+            periods (numpy.array, opcional): Periodos para calcular la respuesta
+            damping_ratio (float, opcional): Razón de amortiguamiento (default: 5%)
+            
         Returns:
-            dict: Diccionario con espectros de respuesta de aceleración, velocidad y desplazamiento
+            dict: Periodos y espectros de respuesta (Sa, Sv, Sd)
         """
-        dt = time[1] - time[0]  # Intervalo de tiempo
+        if periods is None:
+            periods = np.logspace(-2, 1, 100)  # 0.01s a 10s
+            
+        dt = time[1] - time[0]
+        omega = 2 * np.pi / periods
+        Sa = np.zeros_like(periods)
+        Sv = np.zeros_like(periods)
+        Sd = np.zeros_like(periods)
         
-        # Inicializar arrays para almacenar resultados
-        Sa = np.zeros(len(periods))  # Espectro de respuesta de aceleración
-        Sv = np.zeros(len(periods))  # Espectro de respuesta de velocidad
-        Sd = np.zeros(len(periods))  # Espectro de respuesta de desplazamiento
-        
-        # Para cada período, calcular la respuesta máxima
-        for i, period in enumerate(periods):
-            if period > 0:  # Evitar división por cero
-                # Frecuencia natural en rad/s
-                omega = 2 * np.pi / period
+        for i, T in enumerate(periods):
+            # Parámetros del sistema de 1GDL
+            w = 2 * np.pi / T
+            c = 2 * damping_ratio * w
+            k = w * w
+            
+            # Resolver ecuación diferencial usando método de Newmark-Beta
+            u = np.zeros_like(acceleration)  # Desplazamiento
+            v = np.zeros_like(acceleration)  # Velocidad
+            
+            # Parámetros de Newmark-Beta (promedio constante de aceleración)
+            gamma = 0.5
+            beta = 0.25
+            
+            # Constantes para el método
+            a1 = 1 / (beta * dt * dt) + (gamma * c) / (beta * dt)
+            a2 = 1 / (beta * dt)
+            a3 = 1 / (2 * beta) - 1
+            
+            for j in range(1, len(acceleration)):
+                # Predictor
+                dp = -k * u[j-1] - c * v[j-1] - acceleration[j]
                 
-                # Constantes para el método de Newmark-beta
-                c = 2 * damping * omega  # Coeficiente de amortiguamiento
-                k = omega**2  # Rigidez
-                
-                # Inicializar desplazamiento y velocidad
-                u = np.zeros_like(time)
-                v = np.zeros_like(time)
-                a = np.zeros_like(time)
-                
-                # Condiciones iniciales
-                u[0] = 0
-                v[0] = 0
-                a[0] = -acceleration[0]
-                
-                # Método de Newmark-beta (aceleración promedio constante)
-                gamma = 0.5
-                beta = 0.25
-                
-                # Constantes para el método
-                a1 = 1 / (beta * dt**2)
-                a2 = 1 / (beta * dt)
-                a3 = 1 / (2 * beta) - 1
-                a4 = gamma / (beta * dt)
-                a5 = 1 - gamma / beta
-                a6 = dt * (1 - gamma / (2 * beta))
-                
-                # Resolver ecuación de movimiento paso a paso
-                for j in range(1, len(time)):
-                    # Predicción
-                    u_pred = u[j-1] + dt * v[j-1] + dt**2 / 2 * a[j-1]
-                    v_pred = v[j-1] + dt * a[j-1]
-                    
-                    # Residuo
-                    r = -k * u_pred - c * v_pred - acceleration[j]
-                    
-                    # Corrección
-                    delta_a = r / (1 + c * gamma * dt + k * beta * dt**2)
-                    delta_v = gamma * dt * delta_a
-                    delta_u = beta * dt**2 * delta_a
-                    
-                    # Actualizar
-                    a[j] = a[j-1] + delta_a
-                    v[j] = v_pred + delta_v
-                    u[j] = u_pred + delta_u
-                
-                # Guardar valores máximos (en valor absoluto)
-                Sd[i] = np.max(np.abs(u))
-                Sv[i] = np.max(np.abs(v))
-                Sa[i] = np.max(np.abs(a + acceleration))  # Aceleración total
+                # Corrector
+                du = dp / (k + a1)
+                u[j] = u[j-1] + du
+                v[j] = v[j-1] + a2 * du
+            
+            # Calcular valores máximos
+            Sd[i] = np.max(np.abs(u))
+            Sv[i] = np.max(np.abs(v))
+            Sa[i] = w * w * Sd[i]  # Relación entre Sa y Sd
         
         return {
             'periods': periods,
             'Sa': Sa,
             'Sv': Sv,
             'Sd': Sd
+        }
+    
+    def compute_power_spectrum(self, data, sampling_rate):
+        """
+        Calcula el espectro de potencia de la señal.
+        
+        Args:
+            data (numpy.array): Datos de la señal
+            sampling_rate (float): Frecuencia de muestreo en Hz
+            
+        Returns:
+            dict: Frecuencias y espectro de potencia
+        """
+        # Calcular la FFT
+        n = len(data)
+        freq = np.fft.fftfreq(n, d=1/sampling_rate)
+        fft_vals = np.fft.fft(data)
+        
+        # Calcular el espectro de potencia (solo frecuencias positivas)
+        pos_freq_idx = freq >= 0
+        frequencies = freq[pos_freq_idx]
+        power_spectrum = np.abs(fft_vals[pos_freq_idx])**2 / n
+        
+        return {
+            'frequencies': frequencies,
+            'power_spectrum': power_spectrum
+        }
+    
+    def compute_autocorrelation(self, data, max_lag=None):
+        """
+        Calcula la función de autocorrelación de la señal.
+        
+        Args:
+            data (numpy.array): Datos de la señal
+            max_lag (int, opcional): Máximo desfase a considerar
+            
+        Returns:
+            dict: Desfases y coeficientes de autocorrelación
+        """
+        if max_lag is None:
+            max_lag = len(data) // 2
+            
+        # Normalizar los datos
+        data = (data - np.mean(data)) / np.std(data)
+        
+        # Calcular autocorrelación
+        autocorr = np.correlate(data, data, mode='full')
+        autocorr = autocorr[len(autocorr)//2:]  # Solo la parte positiva
+        
+        # Normalizar por la autocorrelación en lag=0
+        autocorr = autocorr / autocorr[0]
+        
+        # Limitar al máximo desfase
+        lags = np.arange(min(len(autocorr), max_lag))
+        autocorr = autocorr[:max_lag]
+        
+        return {
+            'lags': lags,
+            'autocorr': autocorr
+        }
+    
+    def compute_combined_response(self, data_x, data_y, data_z, time, method='SRSS', damping_ratio=0.05):
+        """
+        Calcula la respuesta combinada de múltiples componentes.
+        
+        Args:
+            data_x (numpy.array): Datos de la componente X (Norte-Sur)
+            data_y (numpy.array): Datos de la componente Y (Este-Oeste)
+            data_z (numpy.array): Datos de la componente Z (Vertical)
+            time (numpy.array): Vector de tiempo
+            method (str): Método de combinación ('SRSS' o 'Porcentual')
+            damping_ratio (float): Razón de amortiguamiento (default: 0.05)
+            
+        Returns:
+            dict: Respuesta combinada y sus componentes
+        """
+        if method not in ['SRSS', 'Porcentual']:
+            raise ValueError("El método debe ser 'SRSS' o 'Porcentual'")
+        
+        # Calcular espectros de respuesta individuales
+        periods = np.logspace(-2, 1, 100)  # 0.01s a 10s
+        resp_x = self.compute_response_spectrum(data_x, time, periods, damping_ratio)
+        resp_y = self.compute_response_spectrum(data_y, time, periods, damping_ratio)
+        resp_z = self.compute_response_spectrum(data_z, time, periods, damping_ratio)
+        
+        # Inicializar arrays para la respuesta combinada
+        Sa_comb = np.zeros_like(periods)
+        Sv_comb = np.zeros_like(periods)
+        Sd_comb = np.zeros_like(periods)
+        
+        if method == 'SRSS':
+            # Método de la raíz cuadrada de la suma de cuadrados
+            Sa_comb = np.sqrt(resp_x['Sa']**2 + resp_y['Sa']**2 + resp_z['Sa']**2)
+            Sv_comb = np.sqrt(resp_x['Sv']**2 + resp_y['Sv']**2 + resp_z['Sv']**2)
+            Sd_comb = np.sqrt(resp_x['Sd']**2 + resp_y['Sd']**2 + resp_z['Sd']**2)
+        else:  # Método Porcentual (30%)
+            # Todas las combinaciones posibles
+            combinations = [
+                (1.0, 0.3, 0.3),
+                (0.3, 1.0, 0.3),
+                (0.3, 0.3, 1.0)
+            ]
+            
+            # Calcular cada combinación y tomar el máximo
+            for cx, cy, cz in combinations:
+                Sa_temp = np.abs(cx * resp_x['Sa']) + np.abs(cy * resp_y['Sa']) + np.abs(cz * resp_z['Sa'])
+                Sv_temp = np.abs(cx * resp_x['Sv']) + np.abs(cy * resp_y['Sv']) + np.abs(cz * resp_z['Sv'])
+                Sd_temp = np.abs(cx * resp_x['Sd']) + np.abs(cy * resp_y['Sd']) + np.abs(cz * resp_z['Sd'])
+                
+                Sa_comb = np.maximum(Sa_comb, Sa_temp)
+                Sv_comb = np.maximum(Sv_comb, Sv_temp)
+                Sd_comb = np.maximum(Sd_comb, Sd_temp)
+        
+        return {
+            'periods': periods,
+            'Sa_combined': Sa_comb,
+            'Sv_combined': Sv_comb,
+            'Sd_combined': Sd_comb,
+            'Sa_x': resp_x['Sa'],
+            'Sa_y': resp_y['Sa'],
+            'Sa_z': resp_z['Sa'],
+            'Sv_x': resp_x['Sv'],
+            'Sv_y': resp_y['Sv'],
+            'Sv_z': resp_z['Sv'],
+            'Sd_x': resp_x['Sd'],
+            'Sd_y': resp_y['Sd'],
+            'Sd_z': resp_z['Sd']
         }

@@ -9,6 +9,7 @@ import zipfile
 import io
 from ms_reader import MSReader
 from signal_processor import SignalProcessor
+from fft_processor import FFTProcessor
 
 st.set_page_config(
     page_title="Visor de Acelerógrafos",
@@ -144,13 +145,23 @@ def main():
                     data[component], 
                     data['time']
                 )
-                data[f'{component}_velocity'] = processed_data['velocity']
-                data[f'{component}_displacement'] = processed_data['displacement']
+                # Guardar los datos originales como aceleración
+                data[f'{component}_aceleracion'] = data[component]
+                data[f'{component}_velocidad'] = processed_data['velocity']
+                data[f'{component}_desplazamiento'] = processed_data['displacement']
+            
+            # Calcular el vector suma (magnitud resultante) para cada tipo de dato
+            for data_type in ['aceleracion', 'velocidad', 'desplazamiento']:
+                data[f'vector_suma_{data_type}'] = np.sqrt(
+                    np.power(data[f'N_{data_type}'], 2) + 
+                    np.power(data[f'E_{data_type}'], 2) + 
+                    np.power(data[f'Z_{data_type}'], 2)
+                )
             
             all_data.append(data)
         
         # Crear pestañas para diferentes vistas
-        tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["Vista Individual", "Comparación", "Análisis Espectral", "Filtros", "Detección de Eventos", "Exportar"])
+        tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(["Vista Individual", "Comparación", "Análisis Espectral", "Filtros", "Detección de Eventos", "Exportar", "Espectro de Respuesta"])
         
         with tab1:
             # Selector de registro para vista individual
@@ -194,12 +205,15 @@ def main():
             if data_type == "Aceleración":
                 unit_label = "m/s²" if display_unit == "m/s²" else "g"
                 title_prefix = "Aceleración"
+                data_field_suffix = "aceleracion"
             elif data_type == "Velocidad":
                 unit_label = "m/s"
                 title_prefix = "Velocidad"
+                data_field_suffix = "velocidad"
             else:  # Desplazamiento
                 unit_label = "m"
                 title_prefix = "Desplazamiento"
+                data_field_suffix = "desplazamiento"
             
             # Mapeo de nombres legibles a claves de datos
             component_map = {
@@ -222,14 +236,14 @@ def main():
             fig_ns = go.Figure()
             fig_ns.add_trace(go.Scatter(
                 x=selected_data['time'],
-                y=selected_data[f'N_{data_type.lower()}'] * conversion_factor,
+                y=selected_data[f'N_{data_field_suffix}'] * conversion_factor,
                 mode='lines',
                 name="N (Norte-Sur)",
                 line=dict(color=colors["N (Norte-Sur)"])
             ))
             
             # Configuración del gráfico N-S
-            max_val_ns = abs(selected_data[f'N_{data_type.lower()}']).max() * conversion_factor * 1.2
+            max_val_ns = abs(selected_data[f'N_{data_field_suffix}']).max() * conversion_factor * 1.2
             fig_ns.update_layout(
                 title=title_prefix + " Norte-Sur",
                 xaxis_title="Tiempo (s)",
@@ -244,14 +258,14 @@ def main():
             fig_eo = go.Figure()
             fig_eo.add_trace(go.Scatter(
                 x=selected_data['time'],
-                y=selected_data[f'E_{data_type.lower()}'] * conversion_factor,
+                y=selected_data[f'E_{data_field_suffix}'] * conversion_factor,
                 mode='lines',
                 name="E (Este-Oeste)",
                 line=dict(color=colors["E (Este-Oeste)"])
             ))
             
             # Configuración del gráfico E-O
-            max_val_eo = abs(selected_data[f'E_{data_type.lower()}']).max() * conversion_factor * 1.2
+            max_val_eo = abs(selected_data[f'E_{data_field_suffix}']).max() * conversion_factor * 1.2
             fig_eo.update_layout(
                 title=title_prefix + " Este-Oeste",
                 xaxis_title="Tiempo (s)",
@@ -266,14 +280,14 @@ def main():
             fig_z = go.Figure()
             fig_z.add_trace(go.Scatter(
                 x=selected_data['time'],
-                y=selected_data[f'Z_{data_type.lower()}'] * conversion_factor,
+                y=selected_data[f'Z_{data_field_suffix}'] * conversion_factor,
                 mode='lines',
                 name="Z (Vertical)",
                 line=dict(color=colors["Z (Vertical)"])
             ))
             
             # Configuración del gráfico Z
-            max_val_z = abs(selected_data[f'Z_{data_type.lower()}']).max() * conversion_factor * 1.2
+            max_val_z = abs(selected_data[f'Z_{data_field_suffix}']).max() * conversion_factor * 1.2
             fig_z.update_layout(
                 title=title_prefix + " Vertical",
                 xaxis_title="Tiempo (s)",
@@ -284,58 +298,96 @@ def main():
             )
             st.plotly_chart(fig_z, use_container_width=True)
             
+            # Gráfico del Vector Suma (magnitud resultante)
+            fig_suma = go.Figure()
+            fig_suma.add_trace(go.Scatter(
+                x=selected_data['time'],
+                y=selected_data[f'vector_suma_{data_field_suffix}'] * conversion_factor,
+                mode='lines',
+                name="Vector Suma",
+                line=dict(color="purple")
+            ))
+            
+            # Configuración del gráfico Vector Suma
+            max_val_suma = abs(selected_data[f'vector_suma_{data_field_suffix}']).max() * conversion_factor * 1.2
+            fig_suma.update_layout(
+                title=f"Magnitud Resultante ({title_prefix})",
+                xaxis_title="Tiempo (s)",
+                yaxis_title=f"{title_prefix} ({unit_label})",
+                height=350,
+                margin=dict(l=0, r=0, t=40, b=0),
+                yaxis=dict(range=[0, max_val_suma])
+            )
+            st.plotly_chart(fig_suma, use_container_width=True)
+            
             # Opciones adicionales para análisis
             st.subheader("Opciones adicionales para análisis")
             
-            # Selector de componentes
+            # Selector de componentes para el gráfico individual
             components = st.multiselect(
-                "Seleccionar componentes",
-                ["E (Este-Oeste)", "N (Norte-Sur)", "Z (Vertical)"],
-                default=["E (Este-Oeste)"]
+                "Seleccionar componentes para visualizar juntos:",
+                ["N (Norte-Sur)", "E (Este-Oeste)", "Z (Vertical)", "Vector Suma"],
+                default=["N (Norte-Sur)", "E (Este-Oeste)", "Z (Vertical)"],
+                key="components_tab1"
             )
             
-            # Crear gráfico con Plotly para vista individual
-            fig1 = go.Figure()
+            # Mapeo de nombres legibles a claves de datos
+            component_map = {
+                "N (Norte-Sur)": "N",
+                "E (Este-Oeste)": "E",
+                "Z (Vertical)": "Z",
+                "Vector Suma": "vector_suma"
+            }
             
-            # Agregar cada componente seleccionado
-            for component in components:
-                key = component_map[component]
-                fig1.add_trace(go.Scatter(
-                    x=selected_data['time'],
-                    y=selected_data[f'{key}_{data_type.lower()}'] * conversion_factor,
-                    mode='lines',
-                    name=component,
-                    line=dict(color=colors[component])
-                ))
+            # Colores para cada componente
+            colors = {
+                "N (Norte-Sur)": "blue",
+                "E (Este-Oeste)": "red",
+                "Z (Vertical)": "green",
+                "Vector Suma": "purple"
+            }
+            
+            # Crear gráfico individual con todos los componentes seleccionados
+            if components:
+                fig1 = go.Figure()
+                for component in components:
+                    key = component_map[component]
+                    fig1.add_trace(go.Scatter(
+                        x=selected_data['time'],
+                        y=selected_data[f'{key}_{data_field_suffix}'] * conversion_factor,
+                        mode='lines',
+                        name=component,
+                        line=dict(color=colors[component])
+                    ))
         
-            # Calcular el rango del eje Y basado en el máximo valor absoluto
-            max_vals = []
-            for component in components:
-                key = component_map[component]
-                max_vals.append(abs(selected_data[f'{key}_{data_type.lower()}']).max() * conversion_factor)
-            y_max = max(max_vals) * 2  # Duplicar el valor máximo para el rango
+                # Calcular el rango del eje Y basado en el máximo valor absoluto
+                max_vals = []
+                for component in components:
+                    key = component_map[component]
+                    max_vals.append(abs(selected_data[f'{key}_{data_field_suffix}']).max() * conversion_factor)
+                y_max = max(max_vals) * 2  # Duplicar el valor máximo para el rango
 
-            # Configuración del gráfico individual
-            fig1.update_layout(
-                title=f"Registro de {title_prefix} - {selected_data['name']}",
-                xaxis_title="Tiempo (s)",
-                yaxis_title=f"{title_prefix} ({unit_label})",
-                showlegend=True,
-                height=600,
-                xaxis=dict(
-                    rangeslider=dict(visible=True),
-                    type="linear"
-                ),
-                yaxis=dict(
-                    title=f"{title_prefix} ({unit_label})",
-                    exponentformat='e',
-                    showexponent='all',
-                    tickformat='.2e',
-                    range=[-y_max, y_max]  # Rango simétrico
+                # Configuración del gráfico individual
+                fig1.update_layout(
+                    title=f"Registro de {title_prefix} - {selected_data['name']}",
+                    xaxis_title="Tiempo (s)",
+                    yaxis_title=f"{title_prefix} ({unit_label})",
+                    showlegend=True,
+                    height=600,
+                    xaxis=dict(
+                        rangeslider=dict(visible=True),
+                        type="linear"
+                    ),
+                    yaxis=dict(
+                        title=f"{title_prefix} ({unit_label})",
+                        exponentformat='e',
+                        showexponent='all',
+                        tickformat='.2e',
+                        range=[-y_max, y_max]  # Rango simétrico
+                    )
                 )
-            )
-            
-            st.plotly_chart(fig1, use_container_width=True)
+                
+                st.plotly_chart(fig1, use_container_width=True)
             
         with tab2:
             # Selector de unidades de visualización para comparación
@@ -360,12 +412,15 @@ def main():
             if data_type_comp == "Aceleración":
                 unit_label_comp = "m/s²" if display_unit_comp == "m/s²" else "g"
                 title_prefix_comp = "Aceleración"
+                data_field_suffix_comp = "aceleracion"
             elif data_type_comp == "Velocidad":
                 unit_label_comp = "m/s"
                 title_prefix_comp = "Velocidad"
+                data_field_suffix_comp = "velocidad"
             else:  # Desplazamiento
                 unit_label_comp = "m"
                 title_prefix_comp = "Desplazamiento"
+                data_field_suffix_comp = "desplazamiento"
             
             # Crear tres gráficos separados para cada componente (comparación)
             st.subheader("Comparación de Componentes")
@@ -377,13 +432,13 @@ def main():
             for data in all_data:
                 fig_ns_comp.add_trace(go.Scatter(
                     x=data['time'],
-                    y=data[f'N_{data_type_comp.lower()}'] * conversion_factor_comp,
+                    y=data[f'N_{data_field_suffix_comp}'] * conversion_factor_comp,
                     mode='lines',
                     name=data['name']
                 ))
             
             # Calcular el rango del eje Y para la comparación
-            max_val_ns_comp = max([abs(data[f'N_{data_type_comp.lower()}']).max() * conversion_factor_comp for data in all_data]) * 1.2
+            max_val_ns_comp = max([abs(data[f'N_{data_field_suffix_comp}']).max() * conversion_factor_comp for data in all_data]) * 1.2
             
             # Configuración del gráfico N-S (Comparación)
             fig_ns_comp.update_layout(
@@ -404,13 +459,13 @@ def main():
             for data in all_data:
                 fig_eo_comp.add_trace(go.Scatter(
                     x=data['time'],
-                    y=data[f'E_{data_type_comp.lower()}'] * conversion_factor_comp,
+                    y=data[f'E_{data_field_suffix_comp}'] * conversion_factor_comp,
                     mode='lines',
                     name=data['name']
                 ))
             
             # Calcular el rango del eje Y para la comparación
-            max_val_eo_comp = max([abs(data[f'E_{data_type_comp.lower()}']).max() * conversion_factor_comp for data in all_data]) * 1.2
+            max_val_eo_comp = max([abs(data[f'E_{data_field_suffix_comp}']).max() * conversion_factor_comp for data in all_data]) * 1.2
             
             # Configuración del gráfico E-O (Comparación)
             fig_eo_comp.update_layout(
@@ -431,130 +486,159 @@ def main():
             for data in all_data:
                 fig_z_comp.add_trace(go.Scatter(
                     x=data['time'],
-                    y=data[f'Z_{data_type_comp.lower()}'] * conversion_factor_comp,
+                    y=data[f'Z_{data_field_suffix_comp}'] * conversion_factor_comp,
                     mode='lines',
                     name=data['name']
                 ))
             
             # Calcular el rango del eje Y para la comparación
-            max_val_z_comp = max([abs(data[f'Z_{data_type_comp.lower()}']).max() * conversion_factor_comp for data in all_data]) * 1.2
+            max_val_z_comp = max([abs(data[f'Z_{data_field_suffix_comp}']).max() * conversion_factor_comp for data in all_data]) * 1.2
             
             # Configuración del gráfico Z (Comparación)
             fig_z_comp.update_layout(
-                title="Comparación de Componentes Verticales",
+                title="Componente Vertical",
                 xaxis_title="Tiempo (s)",
                 yaxis_title=f"{title_prefix_comp} ({unit_label_comp})",
                 height=350,
                 margin=dict(l=0, r=0, t=40, b=0),
                 yaxis=dict(range=[-max_val_z_comp, max_val_z_comp]),
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+                showlegend=True
             )
             st.plotly_chart(fig_z_comp, use_container_width=True)
+            
+            # Gráfico del Vector Suma (magnitud resultante) - Comparación
+            fig_suma_comp = go.Figure()
+            for data in all_data:
+                fig_suma_comp.add_trace(go.Scatter(
+                    x=data['time'],
+                    y=data[f'vector_suma_{data_field_suffix_comp}'] * conversion_factor_comp,
+                    mode='lines',
+                    name=data['name']
+                ))
+            
+            # Calcular el rango del eje Y para la comparación
+            max_val_suma_comp = max([abs(data[f'vector_suma_{data_field_suffix_comp}']).max() * conversion_factor_comp for data in all_data]) * 1.2
+            
+            # Configuración del gráfico Vector Suma (Comparación)
+            fig_suma_comp.update_layout(
+                title=f"Magnitud Resultante ({title_prefix_comp})",
+                xaxis_title="Tiempo (s)",
+                yaxis_title=f"{title_prefix_comp} ({unit_label_comp})",
+                height=350,
+                margin=dict(l=0, r=0, t=40, b=0),
+                yaxis=dict(range=[0, max_val_suma_comp]),
+                showlegend=True
+            )
+            st.plotly_chart(fig_suma_comp, use_container_width=True)
 
         with tab3:
             # Selector de registro para análisis espectral
-            if not selected_data:
-                st.info("Por favor, seleccione un registro en la vista individual primero")
-                return
-
-            # Selector de componente para análisis
-            fft_component = st.selectbox(
-                "Seleccionar componente para análisis",
-                ["E (Este-Oeste)", "N (Norte-Sur)", "Z (Vertical)"],
-                key="fft_component"
+            selected_record_spectral = st.selectbox(
+                "Seleccionar registro para análisis espectral",
+                [data['name'] for data in all_data],
+                key="selected_record_spectral"
             )
-
-            # Obtener datos de la componente seleccionada
-            key = component_map[fft_component]
-            data = selected_data[key]
-
-            # Configuración del análisis FFT
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                window_type = st.selectbox(
-                    "Tipo de ventana",
-                    ["hann", "hamming", "blackman", "boxcar"],
-                    key="window_type"
-                )
-            with col2:
-                # Calcular valor máximo basado en la longitud de los datos
-                max_nperseg = min(4096, len(data))
-                default_nperseg = min(1024, max_nperseg)
+            
+            # Obtener los datos del registro seleccionado
+            selected_data_spectral = next(data for data in all_data if data['name'] == selected_record_spectral)
+            
+            # Selector de componente para análisis espectral
+            component_spectral = st.selectbox(
+                "Seleccionar componente para análisis espectral",
+                ["N (Norte-Sur)", "E (Este-Oeste)", "Z (Vertical)", "Vector Suma"],
+                key="component_spectral"
+            )
+            
+            # Obtener el componente seleccionado
+            component_key = component_map[component_spectral]
+            
+            # Selector de tipo de análisis espectral
+            analysis_type = st.selectbox(
+                "Tipo de análisis espectral",
+                ["Espectro de Fourier", "Espectro de Potencia", "Autocorrelación"],
+                key="analysis_type"
+            )
+            
+            # Obtener la frecuencia de muestreo del registro
+            sampling_rate = 1 / (selected_data_spectral['time'][1] - selected_data_spectral['time'][0])
+            
+            if analysis_type == "Espectro de Fourier":
+                # Inicializar el procesador FFT
+                fft_processor = FFTProcessor(sampling_rate)
                 
-                nperseg = st.slider(
-                    "Puntos por segmento",
-                    min_value=128,
-                    max_value=max_nperseg,
-                    value=default_nperseg,
-                    step=128,
-                    key="nperseg",
-                    help="Número de puntos para cada segmento de análisis"
-                )
-            with col3:
-                max_overlap = 90
-                if nperseg >= len(data):
-                    max_overlap = 0
-                    
-                noverlap = st.slider(
-                    "Superposición (%)",
-                    min_value=0,
-                    max_value=max_overlap,
-                    value=min(50, max_overlap),
-                    key="noverlap",
-                    help="Porcentaje de superposición entre segmentos"
+                # Calcular el espectro de Fourier
+                frequencies, magnitudes, phase = fft_processor.compute_fft(
+                    selected_data_spectral[f'{component_key}_{data_field_suffix}']
                 )
                 
-                if nperseg >= len(data):
-                    st.warning("El tamaño del segmento es igual o mayor que la longitud de los datos. Se analizará la señal completa.")
-
-            # Realizar análisis FFT
-            from fft_processor import FFTProcessor
-            fft_proc = FFTProcessor(sampling_rate=float(metadata.get('sampling_rate', 100)))
-
-            # Calcular y mostrar FFT
-            st.subheader("Espectro de Frecuencias")
-            try:
-                frequencies, magnitudes, phase = fft_proc.compute_fft(
-                    data, 
-                    window=window_type,
-                    nperseg=nperseg
-                )
+                # Crear gráfico del espectro de Fourier
+                fig_fft = go.Figure()
+                fig_fft.add_trace(go.Scatter(
+                    x=frequencies,
+                    y=magnitudes,
+                    mode='lines',
+                    name='Amplitud'
+                ))
                 
-                # Mostrar estadísticas básicas
-                col1, col2 = st.columns(2)
-                with col1:
-                    peak_freq = frequencies[np.argmax(magnitudes)]
-                    st.metric("Frecuencia dominante", f"{peak_freq:.2f} Hz")
-                with col2:
-                    peak_mag = np.max(magnitudes)
-                    st.metric("Magnitud máxima", f"{peak_mag:.2e}")
-                    
-                fig_fft = fft_proc.plot_spectrum(
-                    frequencies, 
-                    magnitudes,
-                    title=f"Espectro de Frecuencias - {fft_component}"
+                fig_fft.update_layout(
+                    title=f"Espectro de Fourier - {component_spectral}",
+                    xaxis_title="Frecuencia (Hz)",
+                    yaxis_title="Amplitud",
+                    xaxis_type="log",
+                    yaxis_type="log",
+                    showlegend=True
                 )
                 st.plotly_chart(fig_fft, use_container_width=True)
-            except Exception as e:
-                st.error(f"Error en el análisis FFT: {str(e)}")
-                return
-
-            # Calcular y mostrar espectrograma
-            st.subheader("Espectrograma")
-            freq_spec, times_spec, Sxx = fft_proc.compute_spectrogram(
-                data,
-                window=window_type,
-                nperseg=nperseg,
-                noverlap=int(nperseg * noverlap/100)
-            )
-            fig_spec = fft_proc.plot_spectrogram(
-                freq_spec,
-                times_spec,
-                Sxx,
-                title=f"Espectrograma - {fft_component}"
-            )
-            st.plotly_chart(fig_spec, use_container_width=True)
-
+                
+            elif analysis_type == "Espectro de Potencia":
+                # Calcular el espectro de potencia
+                power_result = signal_processor.compute_power_spectrum(
+                    selected_data_spectral[f'{component_key}_{data_field_suffix}'],
+                    sampling_rate
+                )
+                
+                # Crear gráfico del espectro de potencia
+                fig_power = go.Figure()
+                fig_power.add_trace(go.Scatter(
+                    x=power_result['frequencies'],
+                    y=power_result['power_spectrum'],
+                    mode='lines',
+                    name='Potencia'
+                ))
+                
+                fig_power.update_layout(
+                    title=f"Espectro de Potencia - {component_spectral}",
+                    xaxis_title="Frecuencia (Hz)",
+                    yaxis_title="Potencia",
+                    xaxis_type="log",
+                    yaxis_type="log",
+                    showlegend=True
+                )
+                st.plotly_chart(fig_power, use_container_width=True)
+                
+            else:  # Autocorrelación
+                # Calcular la autocorrelación
+                autocorr_result = signal_processor.compute_autocorrelation(
+                    selected_data_spectral[f'{component_key}_{data_field_suffix}']
+                )
+                
+                # Crear gráfico de autocorrelación
+                fig_autocorr = go.Figure()
+                fig_autocorr.add_trace(go.Scatter(
+                    x=autocorr_result['lags'],
+                    y=autocorr_result['autocorr'],
+                    mode='lines',
+                    name='Autocorrelación'
+                ))
+                
+                fig_autocorr.update_layout(
+                    title=f"Función de Autocorrelación - {component_spectral}",
+                    xaxis_title="Desfase (muestras)",
+                    yaxis_title="Coeficiente de Autocorrelación",
+                    showlegend=True
+                )
+                st.plotly_chart(fig_autocorr, use_container_width=True)
+            
         with tab4:
             # Selector de registro para filtrado
             if not selected_data:
@@ -1012,6 +1096,296 @@ def main():
                 ]
             )
         
+        with tab7:
+            st.subheader("Espectro de Respuesta")
+            
+            # Selector de registro para espectro de respuesta
+            selected_record_response = st.selectbox(
+                "Seleccionar registro para espectro de respuesta",
+                [data['name'] for data in all_data],
+                key="selected_record_response"
+            )
+            
+            # Obtener los datos del registro seleccionado
+            selected_data_response = next(data for data in all_data if data['name'] == selected_record_response)
+            
+            # Selector de tipo de análisis
+            analysis_type = st.radio(
+                "Tipo de análisis",
+                ["Individual", "Combinado"],
+                key="response_analysis_type"
+            )
+            
+            if analysis_type == "Individual":
+                # Selector de componente
+                component_response = st.selectbox(
+                    "Seleccionar componente",
+                    ["N (Norte-Sur)", "E (Este-Oeste)", "Z (Vertical)", "Vector Suma"],
+                    key="component_response"
+                )
+                
+                # Parámetros del espectro de respuesta
+                col1, col2 = st.columns(2)
+                with col1:
+                    damping = st.slider(
+                        "Amortiguamiento (%)",
+                        min_value=0.0,
+                        max_value=20.0,
+                        value=5.0,
+                        step=0.5,
+                        key="damping"
+                    )
+                
+                with col2:
+                    n_periods = st.slider(
+                        "Número de períodos",
+                        min_value=20,
+                        max_value=200,
+                        value=100,
+                        step=10,
+                        key="n_periods"
+                    )
+                
+                # Calcular períodos
+                periods = np.logspace(-2, 1, n_periods)  # 0.01s a 10s
+                
+                # Obtener el componente seleccionado
+                component_key = component_map[component_response]
+                
+                # Calcular espectro de respuesta
+                response_spectrum = signal_processor.compute_response_spectrum(
+                    selected_data_response[f'{component_key}_{data_field_suffix}'],
+                    selected_data_response['time'],
+                    periods=periods,
+                    damping_ratio=damping/100
+                )
+                
+                # Crear gráficos
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    # Espectro de pseudo-aceleración
+                    fig_sa = go.Figure()
+                    fig_sa.add_trace(go.Scatter(
+                        x=response_spectrum['periods'],
+                        y=response_spectrum['Sa'],
+                        mode='lines',
+                        name='Sa'
+                    ))
+                    
+                    fig_sa.update_layout(
+                        title=f"Espectro de Pseudo-aceleración - {component_response}",
+                        xaxis_title="Período (s)",
+                        yaxis_title="Sa (g)",
+                        xaxis_type="log",
+                        yaxis_type="log",
+                        showlegend=True
+                    )
+                    st.plotly_chart(fig_sa, use_container_width=True)
+                
+                with col2:
+                    # Espectro de pseudo-velocidad
+                    fig_sv = go.Figure()
+                    fig_sv.add_trace(go.Scatter(
+                        x=response_spectrum['periods'],
+                        y=response_spectrum['Sv'],
+                        mode='lines',
+                        name='Sv'
+                    ))
+                    
+                    fig_sv.update_layout(
+                        title=f"Espectro de Pseudo-velocidad - {component_response}",
+                        xaxis_title="Período (s)",
+                        yaxis_title="Sv (m/s)",
+                        xaxis_type="log",
+                        yaxis_type="log",
+                        showlegend=True
+                    )
+                    st.plotly_chart(fig_sv, use_container_width=True)
+                
+                # Espectro de desplazamiento
+                fig_sd = go.Figure()
+                fig_sd.add_trace(go.Scatter(
+                    x=response_spectrum['periods'],
+                    y=response_spectrum['Sd'],
+                    mode='lines',
+                    name='Sd'
+                ))
+                
+                fig_sd.update_layout(
+                    title=f"Espectro de Desplazamiento - {component_response}",
+                    xaxis_title="Período (s)",
+                    yaxis_title="Sd (m)",
+                    xaxis_type="log",
+                    yaxis_type="log",
+                    showlegend=True
+                )
+                st.plotly_chart(fig_sd, use_container_width=True)
+                
+            else:  # Análisis Combinado
+                # Método de combinación
+                combination_method = st.radio(
+                    "Método de combinación",
+                    ["SRSS", "Porcentual"],
+                    key="combination_method",
+                    help="SRSS: Raíz cuadrada de la suma de cuadrados\nPorcentual: Regla del 30%"
+                )
+                
+                # Parámetros del espectro de respuesta
+                col1, col2 = st.columns(2)
+                with col1:
+                    damping = st.slider(
+                        "Amortiguamiento (%)",
+                        min_value=0.0,
+                        max_value=20.0,
+                        value=5.0,
+                        step=0.5,
+                        key="damping_combined"
+                    )
+                
+                # Calcular respuesta combinada
+                combined_response = signal_processor.compute_combined_response(
+                    selected_data_response[f'N_{data_field_suffix}'],
+                    selected_data_response[f'E_{data_field_suffix}'],
+                    selected_data_response[f'Z_{data_field_suffix}'],
+                    selected_data_response['time'],
+                    method=combination_method
+                )
+                
+                # Crear gráficos
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    # Espectro de pseudo-aceleración combinado
+                    fig_sa_comb = go.Figure()
+                    # Agregar componentes individuales
+                    fig_sa_comb.add_trace(go.Scatter(
+                        x=combined_response['periods'],
+                        y=combined_response['Sa_x'],
+                        mode='lines',
+                        name='N-S',
+                        line=dict(dash='dot')
+                    ))
+                    fig_sa_comb.add_trace(go.Scatter(
+                        x=combined_response['periods'],
+                        y=combined_response['Sa_y'],
+                        mode='lines',
+                        name='E-O',
+                        line=dict(dash='dot')
+                    ))
+                    fig_sa_comb.add_trace(go.Scatter(
+                        x=combined_response['periods'],
+                        y=combined_response['Sa_z'],
+                        mode='lines',
+                        name='Z',
+                        line=dict(dash='dot')
+                    ))
+                    # Agregar respuesta combinada
+                    fig_sa_comb.add_trace(go.Scatter(
+                        x=combined_response['periods'],
+                        y=combined_response['Sa_combined'],
+                        mode='lines',
+                        name='Combinada',
+                        line=dict(width=3)
+                    ))
+                    
+                    fig_sa_comb.update_layout(
+                        title=f"Espectro de Pseudo-aceleración Combinado ({combination_method})",
+                        xaxis_title="Período (s)",
+                        yaxis_title="Sa (g)",
+                        xaxis_type="log",
+                        yaxis_type="log",
+                        showlegend=True
+                    )
+                    st.plotly_chart(fig_sa_comb, use_container_width=True)
+                
+                with col2:
+                    # Espectro de pseudo-velocidad combinado
+                    fig_sv_comb = go.Figure()
+                    # Agregar componentes individuales
+                    fig_sv_comb.add_trace(go.Scatter(
+                        x=combined_response['periods'],
+                        y=combined_response['Sv_x'],
+                        mode='lines',
+                        name='N-S',
+                        line=dict(dash='dot')
+                    ))
+                    fig_sv_comb.add_trace(go.Scatter(
+                        x=combined_response['periods'],
+                        y=combined_response['Sv_y'],
+                        mode='lines',
+                        name='E-O',
+                        line=dict(dash='dot')
+                    ))
+                    fig_sv_comb.add_trace(go.Scatter(
+                        x=combined_response['periods'],
+                        y=combined_response['Sv_z'],
+                        mode='lines',
+                        name='Z',
+                        line=dict(dash='dot')
+                    ))
+                    # Agregar respuesta combinada
+                    fig_sv_comb.add_trace(go.Scatter(
+                        x=combined_response['periods'],
+                        y=combined_response['Sv_combined'],
+                        mode='lines',
+                        name='Combinada',
+                        line=dict(width=3)
+                    ))
+                    
+                    fig_sv_comb.update_layout(
+                        title=f"Espectro de Pseudo-velocidad Combinado ({combination_method})",
+                        xaxis_title="Período (s)",
+                        yaxis_title="Sv (m/s)",
+                        xaxis_type="log",
+                        yaxis_type="log",
+                        showlegend=True
+                    )
+                    st.plotly_chart(fig_sv_comb, use_container_width=True)
+                
+                # Espectro de desplazamiento combinado
+                fig_sd_comb = go.Figure()
+                # Agregar componentes individuales
+                fig_sd_comb.add_trace(go.Scatter(
+                    x=combined_response['periods'],
+                    y=combined_response['Sd_x'],
+                    mode='lines',
+                    name='N-S',
+                    line=dict(dash='dot')
+                ))
+                fig_sd_comb.add_trace(go.Scatter(
+                    x=combined_response['periods'],
+                    y=combined_response['Sd_y'],
+                    mode='lines',
+                    name='E-O',
+                    line=dict(dash='dot')
+                ))
+                fig_sd_comb.add_trace(go.Scatter(
+                    x=combined_response['periods'],
+                    y=combined_response['Sd_z'],
+                    mode='lines',
+                    name='Z',
+                    line=dict(dash='dot')
+                ))
+                # Agregar respuesta combinada
+                fig_sd_comb.add_trace(go.Scatter(
+                    x=combined_response['periods'],
+                    y=combined_response['Sd_combined'],
+                    mode='lines',
+                    name='Combinada',
+                    line=dict(width=3)
+                ))
+                
+                fig_sd_comb.update_layout(
+                    title=f"Espectro de Desplazamiento Combinado ({combination_method})",
+                    xaxis_title="Período (s)",
+                    yaxis_title="Sd (m)",
+                    xaxis_type="log",
+                    yaxis_type="log",
+                    showlegend=True
+                )
+                st.plotly_chart(fig_sd_comb, use_container_width=True)
+            
     except Exception as e:
         st.error(f"Error al procesar los archivos: {str(e)}")
 
