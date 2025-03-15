@@ -309,3 +309,213 @@ class SignalProcessor:
             'Sd_y': resp_y['Sd'],
             'Sd_z': resp_z['Sd']
         }
+
+    def compute_particle_orbit(self, data_x, data_y, time, start_time=None, end_time=None):
+        """
+        Calcula la órbita de partículas entre dos componentes.
+        
+        Args:
+            data_x (numpy.array): Datos de la primera componente
+            data_y (numpy.array): Datos de la segunda componente
+            time (numpy.array): Vector de tiempo
+            start_time (float, opcional): Tiempo inicial para el análisis
+            end_time (float, opcional): Tiempo final para el análisis
+            
+        Returns:
+            dict: Datos para graficar la órbita de partículas
+        """
+        # Si no se especifican tiempos, usar todo el registro
+        if start_time is None:
+            start_time = time[0]
+        if end_time is None:
+            end_time = time[-1]
+            
+        # Filtrar datos por tiempo
+        mask = (time >= start_time) & (time <= end_time)
+        x_filtered = data_x[mask]
+        y_filtered = data_y[mask]
+        time_filtered = time[mask]
+        
+        return {
+            'x': x_filtered,
+            'y': y_filtered,
+            'time': time_filtered
+        }
+    
+    def compute_fourier_amplitude_ratio(self, data_x, data_y, time):
+        """
+        Calcula la relación de amplitud de Fourier entre dos componentes.
+        
+        Args:
+            data_x (numpy.array): Datos de la primera componente
+            data_y (numpy.array): Datos de la segunda componente
+            time (numpy.array): Vector de tiempo
+            
+        Returns:
+            dict: Frecuencias y relación de amplitud
+        """
+        # Calcular FFT para ambas componentes
+        n = len(data_x)
+        freq = np.fft.fftfreq(n, d=1/self.fs)
+        fft_x = np.fft.fft(data_x)
+        fft_y = np.fft.fft(data_y)
+        
+        # Calcular amplitudes
+        amp_x = np.abs(fft_x)
+        amp_y = np.abs(fft_y)
+        
+        # Calcular relación (evitar división por cero)
+        ratio = np.zeros_like(amp_x)
+        mask = amp_y > 0
+        ratio[mask] = amp_x[mask] / amp_y[mask]
+        
+        # Solo frecuencias positivas
+        pos_freq_idx = freq >= 0
+        frequencies = freq[pos_freq_idx]
+        ratio = ratio[pos_freq_idx]
+        
+        return {
+            'frequencies': frequencies,
+            'ratio': ratio
+        }
+    
+    def compute_phase_difference(self, data_x, data_y, time):
+        """
+        Calcula la diferencia de fase entre dos componentes.
+        
+        Args:
+            data_x (numpy.array): Datos de la primera componente
+            data_y (numpy.array): Datos de la segunda componente
+            time (numpy.array): Vector de tiempo
+            
+        Returns:
+            dict: Frecuencias y diferencia de fase
+        """
+        # Calcular FFT para ambas componentes
+        n = len(data_x)
+        freq = np.fft.fftfreq(n, d=1/self.fs)
+        fft_x = np.fft.fft(data_x)
+        fft_y = np.fft.fft(data_y)
+        
+        # Calcular fases
+        phase_x = np.angle(fft_x)
+        phase_y = np.angle(fft_y)
+        
+        # Calcular diferencia de fase (en grados)
+        phase_diff = np.degrees(phase_x - phase_y)
+        
+        # Normalizar a rango [-180, 180]
+        phase_diff = (phase_diff + 180) % 360 - 180
+        
+        # Solo frecuencias positivas
+        pos_freq_idx = freq >= 0
+        frequencies = freq[pos_freq_idx]
+        phase_diff = phase_diff[pos_freq_idx]
+        
+        return {
+            'frequencies': frequencies,
+            'phase_difference': phase_diff
+        }
+    
+    def compute_cross_power_spectrum(self, data_x, data_y, time):
+        """
+        Calcula el espectro de potencia cruzada entre dos componentes.
+        
+        Args:
+            data_x (numpy.array): Datos de la primera componente
+            data_y (numpy.array): Datos de la segunda componente
+            time (numpy.array): Vector de tiempo
+            
+        Returns:
+            dict: Frecuencias y espectro de potencia cruzada
+        """
+        # Calcular FFT para ambas componentes
+        n = len(data_x)
+        freq = np.fft.fftfreq(n, d=1/self.fs)
+        fft_x = np.fft.fft(data_x)
+        fft_y = np.fft.fft(data_y)
+        
+        # Calcular espectro de potencia cruzada
+        cross_power = fft_x * np.conjugate(fft_y) / n
+        
+        # Solo frecuencias positivas
+        pos_freq_idx = freq >= 0
+        frequencies = freq[pos_freq_idx]
+        cross_power = cross_power[pos_freq_idx]
+        
+        return {
+            'frequencies': frequencies,
+            'cross_power_real': np.real(cross_power),
+            'cross_power_imag': np.imag(cross_power),
+            'cross_power_magnitude': np.abs(cross_power)
+        }
+    
+    def compute_cross_correlation(self, data_x, data_y, max_lag=None):
+        """
+        Calcula la correlación cruzada entre dos componentes.
+        
+        Args:
+            data_x (numpy.array): Datos de la primera componente
+            data_y (numpy.array): Datos de la segunda componente
+            max_lag (int, opcional): Máximo desfase a considerar
+            
+        Returns:
+            dict: Desfases y coeficientes de correlación cruzada
+        """
+        if max_lag is None:
+            max_lag = len(data_x) // 2
+            
+        # Normalizar los datos
+        data_x_norm = (data_x - np.mean(data_x)) / np.std(data_x)
+        data_y_norm = (data_y - np.mean(data_y)) / np.std(data_y)
+        
+        # Calcular correlación cruzada
+        cross_corr = np.correlate(data_x_norm, data_y_norm, mode='full')
+        
+        # Centrar en lag=0
+        mid_point = len(cross_corr) // 2
+        lags = np.arange(-mid_point, mid_point + 1)
+        
+        # Normalizar por las autocorrelaciones en lag=0
+        auto_x = np.correlate(data_x_norm, data_x_norm, mode='valid')[0]
+        auto_y = np.correlate(data_y_norm, data_y_norm, mode='valid')[0]
+        norm_factor = np.sqrt(auto_x * auto_y)
+        cross_corr = cross_corr / norm_factor
+        
+        # Limitar al máximo desfase
+        if max_lag < len(lags) // 2:
+            start_idx = mid_point - max_lag
+            end_idx = mid_point + max_lag + 1
+            lags = lags[start_idx:end_idx]
+            cross_corr = cross_corr[start_idx:end_idx]
+        
+        return {
+            'lags': lags,
+            'cross_corr': cross_corr
+        }
+    
+    def compute_coherence(self, data_x, data_y, time, nperseg=256):
+        """
+        Calcula la función de coherencia entre dos componentes.
+        
+        Args:
+            data_x (numpy.array): Datos de la primera componente
+            data_y (numpy.array): Datos de la segunda componente
+            time (numpy.array): Vector de tiempo
+            nperseg (int, opcional): Longitud de cada segmento para el cálculo
+            
+        Returns:
+            dict: Frecuencias y función de coherencia
+        """
+        # Calcular coherencia usando scipy.signal
+        freq, coherence = signal.coherence(
+            data_x, 
+            data_y, 
+            fs=self.fs, 
+            nperseg=nperseg
+        )
+        
+        return {
+            'frequencies': freq,
+            'coherence': coherence
+        }

@@ -48,6 +48,27 @@
 - ✅ Visualización de resultados combinados
 - ✅ Integración con la interfaz existente
 
+### Fase 6: Análisis de Componentes Múltiples
+
+- ✅ Órbita de partículas
+  - ✅ Implementar visualización 2D para pares de componentes
+  - ✅ Opciones para seleccionar componentes a comparar
+- ✅ Relación de amplitud de Fourier
+  - ✅ Calcular y visualizar la relación entre espectros
+  - ✅ Opciones para seleccionar componentes
+- ✅ Diferencia de fase
+  - ✅ Calcular y visualizar diferencias de fase entre componentes
+  - ✅ Opciones para seleccionar componentes
+- ✅ Espectro de potencia cruzada
+  - ✅ Implementar cálculo de espectro cruzado
+  - ✅ Visualización de resultados
+- ✅ Coeficiente de correlación cruzada
+  - ✅ Implementar función de correlación cruzada
+  - ✅ Visualización de resultados
+- ✅ Función de coherencia
+  - ✅ Implementar cálculo de coherencia entre componentes
+  - ✅ Visualización con opciones de escala
+
 ## Funcionalidades Pendientes
 
 ### Procesamiento de Señales
@@ -83,54 +104,33 @@
   - ✅ Derivar del espectro de respuesta de aceleración
   - ✅ Visualización con opciones de amortiguamiento
 
-### Análisis de Componentes Múltiples
-
-- ⬜ Órbita de partículas
-  - ⬜ Implementar visualización 2D para pares de componentes
-  - ⬜ Opciones para seleccionar componentes a comparar
-- ⬜ Relación de amplitud de Fourier
-  - ⬜ Calcular y visualizar la relación entre espectros
-  - ⬜ Opciones para seleccionar componentes
-- ⬜ Diferencia de fase
-  - ⬜ Calcular y visualizar diferencias de fase entre componentes
-  - ⬜ Opciones para seleccionar componentes
-- ⬜ Espectro de potencia cruzada
-  - ⬜ Implementar cálculo de espectro cruzado
-  - ⬜ Visualización de resultados
-- ⬜ Coeficiente de correlación cruzada
-  - ⬜ Implementar función de correlación cruzada
-  - ⬜ Visualización de resultados
-- ⬜ Función de coherencia
-  - ⬜ Implementar cálculo de coherencia entre componentes
-  - ⬜ Visualización con opciones de escala
-
 ## Próximos Pasos
 
-### Fase 6: Mejoras en la Interfaz
+### Fase 7: Mejoras en la Interfaz
 
 - ✅ Optimización de la navegación
 - ✅ Mejoras en la visualización de gráficos
 - ✅ Personalización de parámetros de visualización
 
-### Fase 7: Exportación y Reportes
+### Fase 8: Exportación y Reportes
 
 - ✅ Exportación de datos procesados
 - ⬜ Generación de reportes automáticos
 - ✅ Formatos múltiples de exportación
 
-### Fase 8: Análisis Avanzado
+### Fase 9: Análisis Avanzado
 
 - ✅ Implementación de métodos adicionales de análisis
 - ✅ Cálculo de parámetros sísmicos
 - ⬜ Integración con bases de datos sísmicas
 
-### Fase 9: Optimización y Rendimiento
+### Fase 10: Optimización y Rendimiento
 
 - ✅ Mejora del rendimiento en procesamiento
 - ✅ Optimización de memoria
 - ✅ Manejo de archivos grandes
 
-### Fase 10: Documentación y Distribución
+### Fase 11: Documentación y Distribución
 
 - ✅ Documentación completa del código
 - ✅ Manual de usuario detallado

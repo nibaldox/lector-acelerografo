@@ -276,13 +276,14 @@ def main():
             all_data.append(data)
         
         # Crear pestañas para diferentes vistas con íconos
-        tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+        tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
             "📊 Vista Individual",
             "📈 Análisis Espectral",
             "🔍 Filtros",
             "⚡ Detección de Eventos",
             "💾 Exportar",
-            "📉 Espectro de Respuesta"
+            "📉 Espectro de Respuesta",
+            "🔄 Análisis Multicomponente"
         ])
         
         with tab1:
@@ -1589,6 +1590,594 @@ def main():
                 )
                 st.plotly_chart(fig_sd_comb, use_container_width=True, config=graph_config)
             
+        with tab7:
+            st.markdown("""
+                <div class='info-container'>
+                    <h4 style='margin: 0;'>Análisis de Componentes Múltiples</h4>
+                    <p style='margin: 0.5rem 0 0 0;'>Analiza las relaciones entre diferentes componentes del registro sísmico.</p>
+                </div>
+            """, unsafe_allow_html=True)
+            
+            # Selector de registro para análisis multicomponente
+            multi_selected_index = st.selectbox(
+                "Seleccionar registro para análisis multicomponente",
+                range(len(all_data)),
+                format_func=lambda i: all_data[i]['name'],
+                key="multicomp_record_selector"
+            )
+            
+            multi_selected_data = all_data[multi_selected_index]
+            
+            # Selector de tipo de datos a visualizar
+            multi_data_type = st.sidebar.radio(
+                "Tipo de datos para análisis multicomponente:",
+                ["Aceleración", "Velocidad", "Desplazamiento"],
+                key="data_type_tab7"
+            )
+            
+            # Mapeo de tipo de datos a sufijo de campo
+            if multi_data_type == "Aceleración":
+                multi_data_field_suffix = "aceleracion"
+                multi_unit_label = "m/s²"
+            elif multi_data_type == "Velocidad":
+                multi_data_field_suffix = "velocidad"
+                multi_unit_label = "m/s"
+            else:  # Desplazamiento
+                multi_data_field_suffix = "desplazamiento"
+                multi_unit_label = "m"
+            
+            # Selector de tipo de análisis
+            analysis_type = st.radio(
+                "Seleccionar tipo de análisis:",
+                ["Órbita de Partículas", "Relación de Amplitud de Fourier", 
+                 "Diferencia de Fase", "Espectro de Potencia Cruzada",
+                 "Correlación Cruzada", "Función de Coherencia"],
+                horizontal=True
+            )
+            
+            # Selector de componentes a comparar
+            comp_cols = st.columns(2)
+            with comp_cols[0]:
+                comp_x = st.selectbox(
+                    "Primera componente:",
+                    ["N (Norte-Sur)", "E (Este-Oeste)", "Z (Vertical)"],
+                    index=0,
+                    key="comp_x"
+                )
+            
+            with comp_cols[1]:
+                comp_y = st.selectbox(
+                    "Segunda componente:",
+                    ["N (Norte-Sur)", "E (Este-Oeste)", "Z (Vertical)"],
+                    index=1,
+                    key="comp_y"
+                )
+            
+            # Mapeo de nombres legibles a claves de datos
+            component_map = {
+                "N (Norte-Sur)": "N",
+                "E (Este-Oeste)": "E",
+                "Z (Vertical)": "Z"
+            }
+            
+            # Obtener datos de las componentes seleccionadas
+            data_x = multi_selected_data[f"{component_map[comp_x]}_{multi_data_field_suffix}"]
+            data_y = multi_selected_data[f"{component_map[comp_y]}_{multi_data_field_suffix}"]
+            time_data = multi_selected_data['time']
+            
+            # Instanciar procesador de señales
+            sampling_rate = float(multi_selected_data['metadata'].get('sampling_rate', 100))
+            signal_processor = SignalProcessor(sampling_rate)
+            
+            # Realizar análisis según el tipo seleccionado
+            if analysis_type == "Órbita de Partículas":
+                # Controles para seleccionar ventana de tiempo
+                time_cols = st.columns(2)
+                with time_cols[0]:
+                    start_time = st.slider(
+                        "Tiempo inicial (s):",
+                        min_value=float(time_data[0]),
+                        max_value=float(time_data[-1]),
+                        value=float(time_data[0]),
+                        step=0.1,
+                        key="orbit_start_time"
+                    )
+                
+                with time_cols[1]:
+                    end_time = st.slider(
+                        "Tiempo final (s):",
+                        min_value=start_time,
+                        max_value=float(time_data[-1]),
+                        value=min(start_time + 5.0, float(time_data[-1])),
+                        step=0.1,
+                        key="orbit_end_time"
+                    )
+                
+                # Calcular órbita de partículas
+                orbit_data = signal_processor.compute_particle_orbit(
+                    data_x, data_y, time_data, start_time, end_time
+                )
+                
+                # Crear gráfico de órbita
+                fig_orbit = go.Figure()
+                
+                # Añadir trayectoria
+                fig_orbit.add_trace(go.Scatter(
+                    x=orbit_data['x'],
+                    y=orbit_data['y'],
+                    mode='lines',
+                    name='Trayectoria',
+                    line=dict(
+                        color='rgba(75, 192, 192, 1)',
+                        width=2
+                    ),
+                    hovertemplate=f"<b>{comp_x}:</b> %{{x:.3f}} {multi_unit_label}<br><b>{comp_y}:</b> %{{y:.3f}} {multi_unit_label}"
+                ))
+                
+                # Añadir punto inicial
+                fig_orbit.add_trace(go.Scatter(
+                    x=[orbit_data['x'][0]],
+                    y=[orbit_data['y'][0]],
+                    mode='markers',
+                    name='Inicio',
+                    marker=dict(
+                        color='green',
+                        size=10,
+                        symbol='circle'
+                    ),
+                    hovertemplate=f"<b>Inicio</b><br><b>{comp_x}:</b> %{{x:.3f}} {multi_unit_label}<br><b>{comp_y}:</b> %{{y:.3f}} {multi_unit_label}"
+                ))
+                
+                # Añadir punto final
+                fig_orbit.add_trace(go.Scatter(
+                    x=[orbit_data['x'][-1]],
+                    y=[orbit_data['y'][-1]],
+                    mode='markers',
+                    name='Fin',
+                    marker=dict(
+                        color='red',
+                        size=10,
+                        symbol='circle'
+                    ),
+                    hovertemplate=f"<b>Fin</b><br><b>{comp_x}:</b> %{{x:.3f}} {multi_unit_label}<br><b>{comp_y}:</b> %{{y:.3f}} {multi_unit_label}"
+                ))
+                
+                # Configurar layout
+                max_val = max(
+                    abs(orbit_data['x']).max(),
+                    abs(orbit_data['y']).max()
+                ) * 1.1
+                
+                fig_orbit.update_layout(
+                    title=f"Órbita de Partículas ({start_time:.2f}s - {end_time:.2f}s)",
+                    xaxis=dict(
+                        title=f"{comp_x} ({multi_unit_label})",
+                        range=[-max_val, max_val],
+                        zeroline=True,
+                        zerolinecolor="var(--zero-line-color)",
+                        zerolinewidth=1,
+                        gridcolor="var(--grid-color)",
+                        color="var(--text-color)"
+                    ),
+                    yaxis=dict(
+                        title=f"{comp_y} ({multi_unit_label})",
+                        range=[-max_val, max_val],
+                        zeroline=True,
+                        zerolinecolor="var(--zero-line-color)",
+                        zerolinewidth=1,
+                        gridcolor="var(--grid-color)",
+                        color="var(--text-color)"
+                    ),
+                    plot_bgcolor="var(--plot-bg)",
+                    paper_bgcolor="var(--plot-bg)",
+                    font=dict(color="var(--text-color)"),
+                    showlegend=True,
+                    legend=dict(
+                        yanchor="top",
+                        y=0.99,
+                        xanchor="right",
+                        x=0.99,
+                        bgcolor="var(--legend-bg)"
+                    ),
+                    height=600,
+                    width=800,
+                    margin=dict(l=50, r=20, t=50, b=50),
+                    hovermode="closest"
+                )
+                
+                # Mostrar gráfico
+                st.plotly_chart(fig_orbit, use_container_width=True)
+                
+                # Añadir explicación
+                st.markdown("""
+                    <div class='info-container'>
+                        <h5>Interpretación de la Órbita de Partículas</h5>
+                        <p>La órbita de partículas muestra el movimiento relativo entre dos componentes del registro sísmico. 
+                        Es útil para identificar la dirección predominante del movimiento y características de polarización de las ondas sísmicas.</p>
+                        <ul>
+                            <li>Una órbita lineal indica movimiento predominante en una dirección.</li>
+                            <li>Una órbita circular o elíptica puede indicar la presencia de ondas Rayleigh o Love.</li>
+                            <li>Cambios abruptos en la forma pueden indicar la llegada de diferentes fases de onda.</li>
+                        </ul>
+                    </div>
+                """, unsafe_allow_html=True)
+            
+            elif analysis_type == "Relación de Amplitud de Fourier":
+                # Calcular relación de amplitud
+                ratio_data = signal_processor.compute_fourier_amplitude_ratio(
+                    data_x, data_y, time_data
+                )
+                
+                # Crear gráfico
+                fig_ratio = go.Figure()
+                
+                # Añadir relación de amplitud
+                fig_ratio.add_trace(go.Scatter(
+                    x=ratio_data['frequencies'],
+                    y=ratio_data['ratio'],
+                    mode='lines',
+                    name='Relación de Amplitud',
+                    line=dict(
+                        color='rgba(75, 192, 192, 1)',
+                        width=2
+                    ),
+                    hovertemplate="<b>Frecuencia:</b> %{x:.2f} Hz<br><b>Relación:</b> %{y:.3f}"
+                ))
+                
+                # Configurar layout
+                fig_ratio.update_layout(
+                    title=f"Relación de Amplitud de Fourier: {comp_x} / {comp_y}",
+                    xaxis=dict(
+                        title="Frecuencia (Hz)",
+                        type="log",
+                        gridcolor="var(--grid-color)",
+                        color="var(--text-color)"
+                    ),
+                    yaxis=dict(
+                        title="Relación de Amplitud",
+                        type="log",
+                        gridcolor="var(--grid-color)",
+                        color="var(--text-color)"
+                    ),
+                    plot_bgcolor="var(--plot-bg)",
+                    paper_bgcolor="var(--plot-bg)",
+                    font=dict(color="var(--text-color)"),
+                    height=500,
+                    margin=dict(l=50, r=20, t=50, b=50)
+                )
+                
+                # Mostrar gráfico
+                st.plotly_chart(fig_ratio, use_container_width=True)
+                
+                # Añadir explicación
+                st.markdown("""
+                    <div class='info-container'>
+                        <h5>Interpretación de la Relación de Amplitud de Fourier</h5>
+                        <p>La relación de amplitud de Fourier muestra la proporción entre las amplitudes espectrales de dos componentes para cada frecuencia.
+                        Es útil para identificar frecuencias donde una componente domina sobre la otra.</p>
+                        <ul>
+                            <li>Valores cercanos a 1 indican amplitudes similares en ambas componentes.</li>
+                            <li>Valores mayores que 1 indican que la primera componente tiene mayor amplitud.</li>
+                            <li>Valores menores que 1 indican que la segunda componente tiene mayor amplitud.</li>
+                        </ul>
+                    </div>
+                """, unsafe_allow_html=True)
+            
+            elif analysis_type == "Diferencia de Fase":
+                # Calcular diferencia de fase
+                phase_data = signal_processor.compute_phase_difference(
+                    data_x, data_y, time_data
+                )
+                
+                # Crear gráfico
+                fig_phase = go.Figure()
+                
+                # Añadir diferencia de fase
+                fig_phase.add_trace(go.Scatter(
+                    x=phase_data['frequencies'],
+                    y=phase_data['phase_difference'],
+                    mode='markers',
+                    name='Diferencia de Fase',
+                    marker=dict(
+                        color='rgba(75, 192, 192, 0.7)',
+                        size=4
+                    ),
+                    hovertemplate="<b>Frecuencia:</b> %{x:.2f} Hz<br><b>Diferencia de fase:</b> %{y:.1f}°"
+                ))
+                
+                # Configurar layout
+                fig_phase.update_layout(
+                    title=f"Diferencia de Fase: {comp_x} - {comp_y}",
+                    xaxis=dict(
+                        title="Frecuencia (Hz)",
+                        type="log",
+                        gridcolor="var(--grid-color)",
+                        color="var(--text-color)"
+                    ),
+                    yaxis=dict(
+                        title="Diferencia de Fase (grados)",
+                        range=[-180, 180],
+                        gridcolor="var(--grid-color)",
+                        color="var(--text-color)"
+                    ),
+                    plot_bgcolor="var(--plot-bg)",
+                    paper_bgcolor="var(--plot-bg)",
+                    font=dict(color="var(--text-color)"),
+                    height=500,
+                    margin=dict(l=50, r=20, t=50, b=50)
+                )
+                
+                # Mostrar gráfico
+                st.plotly_chart(fig_phase, use_container_width=True)
+                
+                # Añadir explicación
+                st.markdown("""
+                    <div class='info-container'>
+                        <h5>Interpretación de la Diferencia de Fase</h5>
+                        <p>La diferencia de fase muestra el desfase entre dos componentes para cada frecuencia.
+                        Es útil para identificar relaciones de fase entre componentes y características de propagación de ondas.</p>
+                        <ul>
+                            <li>0° indica que las componentes están en fase.</li>
+                            <li>±180° indica que las componentes están en contrafase.</li>
+                            <li>±90° indica un desfase de cuarto de ciclo (como en ondas Rayleigh).</li>
+                        </ul>
+                    </div>
+                """, unsafe_allow_html=True)
+            
+            elif analysis_type == "Espectro de Potencia Cruzada":
+                # Calcular espectro de potencia cruzada
+                cross_power_data = signal_processor.compute_cross_power_spectrum(
+                    data_x, data_y, time_data
+                )
+                
+                # Crear gráfico
+                fig_cross = go.Figure()
+                
+                # Añadir magnitud del espectro cruzado
+                fig_cross.add_trace(go.Scatter(
+                    x=cross_power_data['frequencies'],
+                    y=cross_power_data['cross_power_magnitude'],
+                    mode='lines',
+                    name='Magnitud',
+                    line=dict(
+                        color='rgba(75, 192, 192, 1)',
+                        width=2
+                    ),
+                    hovertemplate="<b>Frecuencia:</b> %{x:.2f} Hz<br><b>Magnitud:</b> %{y:.3e}"
+                ))
+                
+                # Añadir parte real
+                fig_cross.add_trace(go.Scatter(
+                    x=cross_power_data['frequencies'],
+                    y=cross_power_data['cross_power_real'],
+                    mode='lines',
+                    name='Parte Real',
+                    line=dict(
+                        color='rgba(192, 75, 75, 1)',
+                        width=1,
+                        dash='dash'
+                    ),
+                    hovertemplate="<b>Frecuencia:</b> %{x:.2f} Hz<br><b>Parte Real:</b> %{y:.3e}"
+                ))
+                
+                # Añadir parte imaginaria
+                fig_cross.add_trace(go.Scatter(
+                    x=cross_power_data['frequencies'],
+                    y=cross_power_data['cross_power_imag'],
+                    mode='lines',
+                    name='Parte Imaginaria',
+                    line=dict(
+                        color='rgba(75, 75, 192, 1)',
+                        width=1,
+                        dash='dot'
+                    ),
+                    hovertemplate="<b>Frecuencia:</b> %{x:.2f} Hz<br><b>Parte Imaginaria:</b> %{y:.3e}"
+                ))
+                
+                # Configurar layout
+                fig_cross.update_layout(
+                    title=f"Espectro de Potencia Cruzada: {comp_x} × {comp_y}",
+                    xaxis=dict(
+                        title="Frecuencia (Hz)",
+                        type="log",
+                        gridcolor="var(--grid-color)",
+                        color="var(--text-color)"
+                    ),
+                    yaxis=dict(
+                        title="Potencia Cruzada",
+                        type="log",
+                        gridcolor="var(--grid-color)",
+                        color="var(--text-color)"
+                    ),
+                    plot_bgcolor="var(--plot-bg)",
+                    paper_bgcolor="var(--plot-bg)",
+                    font=dict(color="var(--text-color)"),
+                    height=500,
+                    margin=dict(l=50, r=20, t=50, b=50),
+                    legend=dict(
+                        yanchor="top",
+                        y=0.99,
+                        xanchor="right",
+                        x=0.99,
+                        bgcolor="var(--legend-bg)"
+                    )
+                )
+                
+                # Mostrar gráfico
+                st.plotly_chart(fig_cross, use_container_width=True)
+                
+                # Añadir explicación
+                st.markdown("""
+                    <div class='info-container'>
+                        <h5>Interpretación del Espectro de Potencia Cruzada</h5>
+                        <p>El espectro de potencia cruzada muestra la correlación en el dominio de la frecuencia entre dos componentes.
+                        Es útil para identificar frecuencias donde las componentes están correlacionadas.</p>
+                        <ul>
+                            <li>La magnitud indica la fuerza de la correlación en cada frecuencia.</li>
+                            <li>La parte real e imaginaria proporcionan información sobre la fase relativa.</li>
+                            <li>Picos en ciertas frecuencias indican correlación fuerte en esas frecuencias.</li>
+                        </ul>
+                    </div>
+                """, unsafe_allow_html=True)
+            
+            elif analysis_type == "Correlación Cruzada":
+                # Calcular correlación cruzada
+                cross_corr_data = signal_processor.compute_cross_correlation(
+                    data_x, data_y
+                )
+                
+                # Convertir lags a tiempo
+                time_lags = cross_corr_data['lags'] / sampling_rate
+                
+                # Crear gráfico
+                fig_corr = go.Figure()
+                
+                # Añadir correlación cruzada
+                fig_corr.add_trace(go.Scatter(
+                    x=time_lags,
+                    y=cross_corr_data['cross_corr'],
+                    mode='lines',
+                    name='Correlación Cruzada',
+                    line=dict(
+                        color='rgba(75, 192, 192, 1)',
+                        width=2
+                    ),
+                    hovertemplate="<b>Desfase:</b> %{x:.3f} s<br><b>Correlación:</b> %{y:.3f}"
+                ))
+                
+                # Añadir línea vertical en lag=0
+                fig_corr.add_shape(
+                    type="line",
+                    x0=0, y0=-1,
+                    x1=0, y1=1,
+                    line=dict(
+                        color="var(--zero-line-color)",
+                        width=1,
+                        dash="dash"
+                    )
+                )
+                
+                # Encontrar el máximo de correlación
+                max_idx = np.argmax(np.abs(cross_corr_data['cross_corr']))
+                max_lag = time_lags[max_idx]
+                max_corr = cross_corr_data['cross_corr'][max_idx]
+                
+                # Añadir anotación para el máximo
+                fig_corr.add_annotation(
+                    x=max_lag,
+                    y=max_corr,
+                    text=f"Máx: {max_corr:.3f} @ {max_lag:.3f}s",
+                    showarrow=True,
+                    arrowhead=2,
+                    arrowsize=1,
+                    arrowwidth=2,
+                    arrowcolor="rgba(75, 192, 192, 1)",
+                    bgcolor="var(--container-bg)",
+                    bordercolor="rgba(75, 192, 192, 1)",
+                    borderwidth=1,
+                    borderpad=4,
+                    font=dict(size=10, color="var(--text-color)")
+                )
+                
+                # Configurar layout
+                fig_corr.update_layout(
+                    title=f"Correlación Cruzada: {comp_x} × {comp_y}",
+                    xaxis=dict(
+                        title="Desfase (s)",
+                        gridcolor="var(--grid-color)",
+                        color="var(--text-color)"
+                    ),
+                    yaxis=dict(
+                        title="Coeficiente de Correlación",
+                        range=[-1.1, 1.1],
+                        gridcolor="var(--grid-color)",
+                        color="var(--text-color)"
+                    ),
+                    plot_bgcolor="var(--plot-bg)",
+                    paper_bgcolor="var(--plot-bg)",
+                    font=dict(color="var(--text-color)"),
+                    height=500,
+                    margin=dict(l=50, r=20, t=50, b=50)
+                )
+                
+                # Mostrar gráfico
+                st.plotly_chart(fig_corr, use_container_width=True)
+                
+                # Añadir explicación
+                st.markdown(f"""
+                    <div class='info-container'>
+                        <h5>Interpretación de la Correlación Cruzada</h5>
+                        <p>La correlación cruzada muestra la similitud entre dos componentes en función del desfase temporal.
+                        Es útil para identificar retrasos entre componentes y estimar velocidades de propagación.</p>
+                        <ul>
+                            <li>El desfase con máxima correlación ({max_lag:.3f}s) indica el tiempo de retraso entre las componentes.</li>
+                            <li>Valores cercanos a ±1 indican alta correlación (positiva o negativa).</li>
+                            <li>Valores cercanos a 0 indican baja correlación.</li>
+                        </ul>
+                    </div>
+                """, unsafe_allow_html=True)
+            
+            elif analysis_type == "Función de Coherencia":
+                # Calcular coherencia
+                coherence_data = signal_processor.compute_coherence(
+                    data_x, data_y, time_data
+                )
+                
+                # Crear gráfico
+                fig_coh = go.Figure()
+                
+                # Añadir coherencia
+                fig_coh.add_trace(go.Scatter(
+                    x=coherence_data['frequencies'],
+                    y=coherence_data['coherence'],
+                    mode='lines',
+                    name='Coherencia',
+                    line=dict(
+                        color='rgba(75, 192, 192, 1)',
+                        width=2
+                    ),
+                    hovertemplate="<b>Frecuencia:</b> %{x:.2f} Hz<br><b>Coherencia:</b> %{y:.3f}"
+                ))
+                
+                # Configurar layout
+                fig_coh.update_layout(
+                    title=f"Función de Coherencia: {comp_x} - {comp_y}",
+                    xaxis=dict(
+                        title="Frecuencia (Hz)",
+                        type="log",
+                        gridcolor="var(--grid-color)",
+                        color="var(--text-color)"
+                    ),
+                    yaxis=dict(
+                        title="Coherencia",
+                        range=[0, 1.05],
+                        gridcolor="var(--grid-color)",
+                        color="var(--text-color)"
+                    ),
+                    plot_bgcolor="var(--plot-bg)",
+                    paper_bgcolor="var(--plot-bg)",
+                    font=dict(color="var(--text-color)"),
+                    height=500,
+                    margin=dict(l=50, r=20, t=50, b=50)
+                )
+                
+                # Mostrar gráfico
+                st.plotly_chart(fig_coh, use_container_width=True)
+                
+                # Añadir explicación
+                st.markdown("""
+                    <div class='info-container'>
+                        <h5>Interpretación de la Función de Coherencia</h5>
+                        <p>La función de coherencia mide la correlación lineal entre dos componentes en función de la frecuencia.
+                        Es útil para identificar frecuencias donde las componentes están linealmente relacionadas.</p>
+                        <ul>
+                            <li>Valores cercanos a 1 indican alta coherencia (fuerte relación lineal).</li>
+                            <li>Valores cercanos a 0 indican baja coherencia (poca relación lineal).</li>
+                            <li>Bandas de frecuencia con alta coherencia pueden indicar fenómenos físicos específicos.</li>
+                        </ul>
+                    </div>
+                """, unsafe_allow_html=True)
+
     except Exception as e:
         st.error(f"Error al procesar los archivos: {str(e)}")
 
