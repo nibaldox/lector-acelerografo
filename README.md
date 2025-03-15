@@ -80,7 +80,19 @@ streamlit run app.py
 http://localhost:8501
 ```
 
-3. Seleccionar directorio con archivos .ms y .ss
+3. Cargar datos de acelerógrafos:
+
+   - **Opción 1: Archivos Individuales**
+     - Seleccione los archivos .ms y .ss correspondientes
+     - Asegúrese de subir ambos archivos para cada registro
+
+   - **Opción 2: Carpeta Completa (ZIP)**
+     - Comprima la carpeta que contiene los archivos .ms/.ss en un archivo ZIP
+     - Suba el archivo ZIP mediante el selector correspondiente
+     - La aplicación procesará automáticamente toda la estructura de directorios
+     - Se mantendrá la jerarquía original de archivos y subcarpetas
+
+4. Seleccione los registros a visualizar y analizar
 
 ## Estructura de Archivos y Módulos
 

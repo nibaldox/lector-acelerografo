@@ -5,6 +5,8 @@ import os
 import numpy as np
 import tempfile
 import shutil
+import zipfile
+import io
 from ms_reader import MSReader
 
 st.set_page_config(
@@ -44,31 +46,68 @@ def main():
     for file in upload_dir.glob("*"):
         if file.is_file():
             file.unlink()
+        elif file.is_dir():
+            shutil.rmtree(file)
     
-    # Selector de archivos para subir
-    st.sidebar.markdown("### Subir Archivos")
-    uploaded_files = st.sidebar.file_uploader(
-        "Subir archivos .ms y .ss",
-        accept_multiple_files=True,
-        type=["ms", "ss"]
-    )
+    # Selector de método de carga
+    st.sidebar.markdown("### Cargar Datos")
+    upload_option = st.sidebar.radio("Seleccionar método de carga:", 
+                                   ["Archivos Individuales", "Carpeta Completa (ZIP)"])
     
     # Procesar archivos subidos
     ms_files = []
     
-    if uploaded_files:
-        # Guardar archivos subidos en el directorio temporal
-        for uploaded_file in uploaded_files:
-            file_path = upload_dir / uploaded_file.name
-            with open(file_path, "wb") as f:
-                f.write(uploaded_file.getbuffer())
+    if upload_option == "Carpeta Completa (ZIP)":
+        zip_file = st.sidebar.file_uploader(
+            "Subir carpeta comprimida (ZIP)", 
+            type=["zip"],
+            help="Comprima la carpeta conteniendo los archivos .ms/.ss antes de subir"
+        )
         
-        # Buscar pares de archivos .ms y .ss
-        ms_paths = list(upload_dir.glob("*.ms"))
-        for ms_path in ms_paths:
-            ss_path = ms_path.with_suffix(".ss")
-            if ss_path.exists():
-                ms_files.append((str(ms_path), str(ss_path)))
+        if zip_file:
+            # Crear directorio temporal para extracción
+            extract_dir = upload_dir / "extracted"
+            extract_dir.mkdir(exist_ok=True)
+            
+            # Mostrar mensaje de progreso
+            with st.sidebar.status("Extrayendo archivos..."):
+                # Extraer contenido del ZIP
+                with zipfile.ZipFile(io.BytesIO(zip_file.read())) as z:
+                    z.extractall(extract_dir)
+                st.sidebar.success(f"ZIP extraído correctamente: {len(z.namelist())} archivos")
+            
+            # Buscar archivos en la estructura extraída
+            ms_paths = list(extract_dir.rglob("*.ms"))
+            for ms_path in ms_paths:
+                ss_path = ms_path.with_suffix(".ss")
+                if ss_path.exists():
+                    ms_files.append((str(ms_path), str(ss_path)))
+            
+            if ms_files:
+                st.sidebar.success(f"Se encontraron {len(ms_files)} pares de archivos .ms/.ss")
+            else:
+                st.sidebar.warning("No se encontraron pares de archivos .ms/.ss en el ZIP")
+    else:
+        # Mantener la funcionalidad actual de subida individual
+        uploaded_files = st.sidebar.file_uploader(
+            "Subir archivos .ms y .ss",
+            accept_multiple_files=True,
+            type=["ms", "ss"]
+        )
+        
+        if uploaded_files:
+            # Guardar archivos subidos en el directorio temporal
+            for uploaded_file in uploaded_files:
+                file_path = upload_dir / uploaded_file.name
+                with open(file_path, "wb") as f:
+                    f.write(uploaded_file.getbuffer())
+            
+            # Buscar pares de archivos .ms y .ss
+            ms_paths = list(upload_dir.glob("*.ms"))
+            for ms_path in ms_paths:
+                ss_path = ms_path.with_suffix(".ss")
+                if ss_path.exists():
+                    ms_files.append((str(ms_path), str(ss_path)))
     
     if not ms_files:
         st.info("Por favor, sube pares de archivos .ms y .ss para visualizar. Asegúrate de que cada archivo .ms tenga su correspondiente archivo .ss con el mismo nombre.")
