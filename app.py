@@ -157,6 +157,18 @@ def main():
             with col3:
                 st.metric("Unidades", metadata.get('unit', 'm/s/s'))
             
+            # Selector de unidades de visualización
+            st.sidebar.subheader("Unidades de Visualización")
+            display_unit = st.sidebar.radio(
+                "Seleccionar unidad:",
+                ["m/s²", "g (9.81 m/s²)"],
+                key="display_unit_tab1"
+            )
+            
+            # Factor de conversión según la unidad seleccionada
+            conversion_factor = 1.0 if display_unit == "m/s²" else 1.0/9.81
+            unit_label = "m/s²" if display_unit == "m/s²" else "g"
+            
             # Mapeo de nombres legibles a claves de datos
             component_map = {
                 "E (Este-Oeste)": "E",
@@ -170,6 +182,78 @@ def main():
                 "N (Norte-Sur)": "#2ca02c",   # Verde
                 "Z (Vertical)": "#d62728"     # Rojo
             }
+            
+            # Crear tres gráficos separados para cada componente
+            st.subheader("Componentes de Aceleración")
+            
+            # Componente Norte-Sur
+            fig_ns = go.Figure()
+            fig_ns.add_trace(go.Scatter(
+                x=selected_data['time'],
+                y=selected_data['N'] * conversion_factor,
+                mode='lines',
+                name="N (Norte-Sur)",
+                line=dict(color=colors["N (Norte-Sur)"])
+            ))
+            
+            # Configuración del gráfico N-S
+            max_val_ns = abs(selected_data['N']).max() * conversion_factor * 1.2
+            fig_ns.update_layout(
+                title="Componente Norte-Sur",
+                xaxis_title="Tiempo (s)",
+                yaxis_title=f"Aceleración ({unit_label})",
+                height=350,
+                margin=dict(l=0, r=0, t=40, b=0),
+                yaxis=dict(range=[-max_val_ns, max_val_ns])
+            )
+            st.plotly_chart(fig_ns, use_container_width=True)
+            
+            # Componente Este-Oeste
+            fig_eo = go.Figure()
+            fig_eo.add_trace(go.Scatter(
+                x=selected_data['time'],
+                y=selected_data['E'] * conversion_factor,
+                mode='lines',
+                name="E (Este-Oeste)",
+                line=dict(color=colors["E (Este-Oeste)"])
+            ))
+            
+            # Configuración del gráfico E-O
+            max_val_eo = abs(selected_data['E']).max() * conversion_factor * 1.2
+            fig_eo.update_layout(
+                title="Componente Este-Oeste",
+                xaxis_title="Tiempo (s)",
+                yaxis_title=f"Aceleración ({unit_label})",
+                height=350,
+                margin=dict(l=0, r=0, t=40, b=0),
+                yaxis=dict(range=[-max_val_eo, max_val_eo])
+            )
+            st.plotly_chart(fig_eo, use_container_width=True)
+            
+            # Componente Vertical
+            fig_z = go.Figure()
+            fig_z.add_trace(go.Scatter(
+                x=selected_data['time'],
+                y=selected_data['Z'] * conversion_factor,
+                mode='lines',
+                name="Z (Vertical)",
+                line=dict(color=colors["Z (Vertical)"])
+            ))
+            
+            # Configuración del gráfico Z
+            max_val_z = abs(selected_data['Z']).max() * conversion_factor * 1.2
+            fig_z.update_layout(
+                title="Componente Vertical",
+                xaxis_title="Tiempo (s)",
+                yaxis_title=f"Aceleración ({unit_label})",
+                height=350,
+                margin=dict(l=0, r=0, t=40, b=0),
+                yaxis=dict(range=[-max_val_z, max_val_z])
+            )
+            st.plotly_chart(fig_z, use_container_width=True)
+            
+            # Opciones adicionales para análisis
+            st.subheader("Opciones adicionales para análisis")
             
             # Selector de componentes
             components = st.multiselect(
@@ -186,7 +270,7 @@ def main():
                 key = component_map[component]
                 fig1.add_trace(go.Scatter(
                     x=selected_data['time'],
-                    y=selected_data[key],
+                    y=selected_data[key] * conversion_factor,
                     mode='lines',
                     name=component,
                     line=dict(color=colors[component])
@@ -196,14 +280,14 @@ def main():
             max_vals = []
             for component in components:
                 key = component_map[component]
-                max_vals.append(abs(selected_data[key]).max())
+                max_vals.append(abs(selected_data[key]).max() * conversion_factor)
             y_max = max(max_vals) * 2  # Duplicar el valor máximo para el rango
 
             # Configuración del gráfico individual
             fig1.update_layout(
                 title=f"Registro de Aceleración - {selected_data['name']}",
                 xaxis_title="Tiempo (s)",
-                yaxis_title=f"Aceleración ({metadata.get('unit', 'm/s/s')})",
+                yaxis_title=f"Aceleración ({unit_label})",
                 showlegend=True,
                 height=600,
                 xaxis=dict(
@@ -211,7 +295,7 @@ def main():
                     type="linear"
                 ),
                 yaxis=dict(
-                    title=f"Aceleración ({metadata.get('unit', 'm/s/s')})",
+                    title=f"Aceleración ({unit_label})",
                     exponentformat='e',
                     showexponent='all',
                     tickformat='.2e',
@@ -222,52 +306,101 @@ def main():
             st.plotly_chart(fig1, use_container_width=True)
             
         with tab2:
-            # Selector de componente para comparación
-            compare_component = st.selectbox(
-                "Seleccionar componente para comparar",
-                ["E (Este-Oeste)", "N (Norte-Sur)", "Z (Vertical)"]
+            # Selector de unidades de visualización para comparación
+            st.sidebar.subheader("Unidades de Visualización (Comparación)")
+            display_unit_comp = st.sidebar.radio(
+                "Seleccionar unidad:",
+                ["m/s²", "g (9.81 m/s²)"],
+                key="display_unit_tab2"
             )
             
-            # Crear gráfico de comparación
-            fig2 = go.Figure()
+            # Factor de conversión según la unidad seleccionada
+            conversion_factor_comp = 1.0 if display_unit_comp == "m/s²" else 1.0/9.81
+            unit_label_comp = "m/s²" if display_unit_comp == "m/s²" else "g"
+            
+            # Crear tres gráficos separados para cada componente (comparación)
+            st.subheader("Comparación de Componentes")
+            
+            # Componente Norte-Sur (Comparación)
+            fig_ns_comp = go.Figure()
             
             # Agregar cada registro seleccionado
             for data in all_data:
-                key = component_map[compare_component]
-                time_array = data['time'].tolist()  # Convertir a lista
-                values_array = data[key].tolist()   # Convertir a lista
-                fig2.add_trace(go.Scatter(
-                    x=time_array,
-                    y=values_array,
+                fig_ns_comp.add_trace(go.Scatter(
+                    x=data['time'],
+                    y=data['N'] * conversion_factor_comp,
                     mode='lines',
                     name=data['name']
                 ))
             
             # Calcular el rango del eje Y para la comparación
-            max_val = max([abs(data[component_map[compare_component]]).max() for data in all_data])
-            y_max = max_val * 2  # Duplicar el valor máximo para el rango
-
-            # Configuración del gráfico de comparación
-            fig2.update_layout(
-                title=f"Comparación de {compare_component}",
-                xaxis_title="Tiempo (s)",
-                yaxis_title=f"Aceleración ({metadata.get('unit', 'm/s/s')})",
-                showlegend=True,
-                height=600,
-                xaxis=dict(
-                    rangeslider=dict(visible=True),
-                    type="linear"
-                ),
-                yaxis=dict(
-                    title=f"Aceleración ({metadata.get('unit', 'm/s/s')})",
-                    exponentformat='e',
-                    showexponent='all',
-                    tickformat='.2e',
-                    range=[-y_max, y_max]  # Rango simétrico
-                )
-            )
+            max_val_ns_comp = max([abs(data['N']).max() * conversion_factor_comp for data in all_data]) * 1.2
             
-            st.plotly_chart(fig2, use_container_width=True)
+            # Configuración del gráfico N-S (Comparación)
+            fig_ns_comp.update_layout(
+                title="Comparación de Componentes Norte-Sur",
+                xaxis_title="Tiempo (s)",
+                yaxis_title=f"Aceleración ({unit_label_comp})",
+                height=350,
+                margin=dict(l=0, r=0, t=40, b=0),
+                yaxis=dict(range=[-max_val_ns_comp, max_val_ns_comp]),
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+            )
+            st.plotly_chart(fig_ns_comp, use_container_width=True)
+            
+            # Componente Este-Oeste (Comparación)
+            fig_eo_comp = go.Figure()
+            
+            # Agregar cada registro seleccionado
+            for data in all_data:
+                fig_eo_comp.add_trace(go.Scatter(
+                    x=data['time'],
+                    y=data['E'] * conversion_factor_comp,
+                    mode='lines',
+                    name=data['name']
+                ))
+            
+            # Calcular el rango del eje Y para la comparación
+            max_val_eo_comp = max([abs(data['E']).max() * conversion_factor_comp for data in all_data]) * 1.2
+            
+            # Configuración del gráfico E-O (Comparación)
+            fig_eo_comp.update_layout(
+                title="Comparación de Componentes Este-Oeste",
+                xaxis_title="Tiempo (s)",
+                yaxis_title=f"Aceleración ({unit_label_comp})",
+                height=350,
+                margin=dict(l=0, r=0, t=40, b=0),
+                yaxis=dict(range=[-max_val_eo_comp, max_val_eo_comp]),
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+            )
+            st.plotly_chart(fig_eo_comp, use_container_width=True)
+            
+            # Componente Vertical (Comparación)
+            fig_z_comp = go.Figure()
+            
+            # Agregar cada registro seleccionado
+            for data in all_data:
+                fig_z_comp.add_trace(go.Scatter(
+                    x=data['time'],
+                    y=data['Z'] * conversion_factor_comp,
+                    mode='lines',
+                    name=data['name']
+                ))
+            
+            # Calcular el rango del eje Y para la comparación
+            max_val_z_comp = max([abs(data['Z']).max() * conversion_factor_comp for data in all_data]) * 1.2
+            
+            # Configuración del gráfico Z (Comparación)
+            fig_z_comp.update_layout(
+                title="Comparación de Componentes Verticales",
+                xaxis_title="Tiempo (s)",
+                yaxis_title=f"Aceleración ({unit_label_comp})",
+                height=350,
+                margin=dict(l=0, r=0, t=40, b=0),
+                yaxis=dict(range=[-max_val_z_comp, max_val_z_comp]),
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+            )
+            st.plotly_chart(fig_z_comp, use_container_width=True)
 
         with tab3:
             # Selector de registro para análisis espectral
@@ -402,7 +535,8 @@ def main():
                         max_value=float(metadata.get('sampling_rate', '100'))/2,
                         value=10.0,
                         step=0.1,
-                        key="cutoff"
+                        key="cutoff",
+                        help="Frecuencia de corte para el filtro"
                     )
                 else:
                     lowcut = st.slider(
@@ -411,7 +545,8 @@ def main():
                         max_value=float(metadata.get('sampling_rate', '100'))/2,
                         value=1.0,
                         step=0.1,
-                        key="lowcut"
+                        key="lowcut",
+                        help="Frecuencia de corte inferior para el filtro"
                     )
             with col3:
                 if filter_type == "bandpass":
@@ -421,7 +556,8 @@ def main():
                         max_value=float(metadata.get('sampling_rate', '100'))/2,
                         value=min(20.0, float(metadata.get('sampling_rate', '100'))/2),
                         step=0.1,
-                        key="highcut"
+                        key="highcut",
+                        help="Frecuencia de corte superior para el filtro"
                     )
                 
                 filter_order = st.slider(
@@ -430,7 +566,8 @@ def main():
                     max_value=8,
                     value=4,
                     step=2,
-                    key="filter_order"
+                    key="filter_order",
+                    help="Orden del filtro"
                 )
 
             # Aplicar filtro
