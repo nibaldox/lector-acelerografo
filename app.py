@@ -3,6 +3,8 @@ import plotly.graph_objects as go
 from pathlib import Path
 import os
 import numpy as np
+import tempfile
+import shutil
 from ms_reader import MSReader
 
 st.set_page_config(
@@ -34,26 +36,42 @@ def main():
     # Sidebar para configuración
     st.sidebar.header("Configuración")
     
-    # Selector de directorio
-    st.sidebar.markdown("### Seleccionar Directorio")
-    directory = st.sidebar.text_input("Directorio de datos", value="")
+    # Crear directorio temporal para archivos subidos
+    upload_dir = Path("uploads")
+    upload_dir.mkdir(exist_ok=True)
     
-    if not directory or not os.path.exists(directory):
-        st.info("Por favor, ingrese un directorio válido que contenga los archivos .ms y .ss")
-        return
-        
-    # Encontrar todos los archivos .ms y sus correspondientes .ss
+    # Limpiar directorio temporal al inicio
+    for file in upload_dir.glob("*"):
+        if file.is_file():
+            file.unlink()
+    
+    # Selector de archivos para subir
+    st.sidebar.markdown("### Subir Archivos")
+    uploaded_files = st.sidebar.file_uploader(
+        "Subir archivos .ms y .ss",
+        accept_multiple_files=True,
+        type=["ms", "ss"]
+    )
+    
+    # Procesar archivos subidos
     ms_files = []
-    for root, _, files in os.walk(directory):
-        for file in files:
-            if file.endswith('.ms'):
-                ms_path = os.path.join(root, file)
-                ss_path = ms_path.replace('.ms', '.ss')
-                if os.path.exists(ss_path):
-                    ms_files.append((ms_path, ss_path))
+    
+    if uploaded_files:
+        # Guardar archivos subidos en el directorio temporal
+        for uploaded_file in uploaded_files:
+            file_path = upload_dir / uploaded_file.name
+            with open(file_path, "wb") as f:
+                f.write(uploaded_file.getbuffer())
+        
+        # Buscar pares de archivos .ms y .ss
+        ms_paths = list(upload_dir.glob("*.ms"))
+        for ms_path in ms_paths:
+            ss_path = ms_path.with_suffix(".ss")
+            if ss_path.exists():
+                ms_files.append((str(ms_path), str(ss_path)))
     
     if not ms_files:
-        st.error("No se encontraron pares de archivos .ms y .ss en el directorio")
+        st.info("Por favor, sube pares de archivos .ms y .ss para visualizar. Asegúrate de que cada archivo .ms tenga su correspondiente archivo .ss con el mismo nombre.")
         return
         
     # Selector de archivos encontrados
@@ -65,7 +83,7 @@ def main():
     )
     
     if not selected_files:
-        st.info("Por favor, seleccione al menos un registro para visualizar")
+        st.info("Por favor, selecciona al menos un registro para visualizar")
         return
 
     try:
