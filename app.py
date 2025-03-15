@@ -11,10 +11,125 @@ from ms_reader import MSReader
 from signal_processor import SignalProcessor
 from fft_processor import FFTProcessor
 
+# Configuración inicial de la página
 st.set_page_config(
     page_title="Visor de Acelerógrafos",
-    layout="wide"
+    layout="wide",
+    initial_sidebar_state="expanded",
+    menu_items={
+        'About': 'Visor de Acelerógrafos - Desarrollado para análisis sísmico'
+    }
 )
+
+# Estilos personalizados
+st.markdown("""
+    <script>
+        const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        localStorage.setItem('theme', prefersDark ? 'dark' : 'light');
+    </script>
+""", unsafe_allow_html=True)
+
+st.markdown("""
+    <style>
+    :root {
+        --background-color: white;
+        --text-color: #262730;
+        --secondary-text-color: #4b5563;
+        --container-bg: #f0f2f6;
+        --metric-bg: #f8f9fa;
+        --grid-color: rgba(128, 128, 128, 0.2);
+        --zero-line-color: rgba(128, 128, 128, 0.4);
+        --plot-bg: rgba(255, 255, 255, 0);
+        --legend-bg: rgba(255, 255, 255, 0.8);
+        --hover-bg: white;
+        --modebar-bg: rgba(255, 255, 255, 0.9);
+        --modebar-color: rgba(0, 0, 0, 0.6);
+        --modebar-active: rgba(0, 0, 0, 0.9);
+    }
+    
+    @media (prefers-color-scheme: dark) {
+        :root {
+            --background-color: #0e1117;
+            --text-color: #e0e0e0;
+            --secondary-text-color: #b0b0b0;
+            --container-bg: #1e1e1e;
+            --metric-bg: #1e1e1e;
+            --grid-color: rgba(128, 128, 128, 0.2);
+            --zero-line-color: rgba(128, 128, 128, 0.4);
+            --plot-bg: rgba(0, 0, 0, 0);
+            --legend-bg: rgba(30, 30, 30, 0.5);
+            --hover-bg: #1e1e1e;
+            --modebar-bg: rgba(30, 30, 30, 0.5);
+            --modebar-color: rgba(200, 200, 200, 0.6);
+            --modebar-active: rgba(255, 255, 255, 0.9);
+        }
+    }
+    
+    .main {
+        padding: 1rem;
+    }
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 8px;
+    }
+    .stTabs [data-baseweb="tab"] {
+        padding: 8px 16px;
+        border-radius: 4px;
+    }
+    .stTabs [data-baseweb="tab-list"] button {
+        font-size: 16px;
+    }
+    .stTabs [data-baseweb="tab-list"] button[aria-selected="true"] {
+        background-color: #0078D4;
+        color: white;
+    }
+    .stMetric {
+        background-color: var(--metric-bg);
+        padding: 1rem;
+        border-radius: 8px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+        color: var(--text-color);
+    }
+    .stMetric label {
+        color: var(--text-color) !important;
+    }
+    .stMetric [data-testid="stMetricValue"] {
+        color: var(--text-color) !important;
+        font-weight: bold;
+    }
+    .info-container, div.stMarkdown p, div.stMarkdown div {
+        background-color: var(--container-bg) !important;
+        color: var(--text-color) !important;
+    }
+    /* Forzar el color de fondo en todos los elementos */
+    .stMarkdown * {
+        background-color: var(--container-bg) !important;
+    }
+    /* Asegurar que todos los contenedores tengan el mismo estilo */
+    div.element-container, div.block-container {
+        color: var(--text-color);
+    }
+    /* Estilo para todos los contenedores de Streamlit */
+    div.stMarkdown, div.stText, div.stDataFrame, div.stTable, div.stPlotly {
+        background-color: var(--container-bg);
+        border-radius: 8px;
+        padding: 0.5rem;
+        margin-bottom: 1rem;
+        color: var(--text-color);
+    }
+    /* Asegurar que los gráficos tengan fondo transparente */
+    .js-plotly-plot .plotly .main-svg {
+        background-color: rgba(0, 0, 0, 0) !important;
+    }
+    /* Estilo para los selectores y controles */
+    .stSelectbox, .stSlider, .stRadio, .stCheckbox {
+        background-color: var(--container-bg);
+        border-radius: 8px;
+        padding: 0.5rem;
+        margin-bottom: 1rem;
+        color: var(--text-color);
+    }
+    </style>
+""", unsafe_allow_html=True)
 
 def get_ss_file(ms_file_path):
     """Obtiene el archivo .ss correspondiente al archivo .ms"""
@@ -160,10 +275,24 @@ def main():
             
             all_data.append(data)
         
-        # Crear pestañas para diferentes vistas
-        tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(["Vista Individual", "Comparación", "Análisis Espectral", "Filtros", "Detección de Eventos", "Exportar", "Espectro de Respuesta"])
+        # Crear pestañas para diferentes vistas con íconos
+        tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+            "📊 Vista Individual",
+            "📈 Análisis Espectral",
+            "🔍 Filtros",
+            "⚡ Detección de Eventos",
+            "💾 Exportar",
+            "📉 Espectro de Respuesta"
+        ])
         
         with tab1:
+            st.markdown("""
+                <div class='info-container'>
+                    <h4 style='margin: 0;'>Vista Individual de Registros</h4>
+                    <p style='margin: 0.5rem 0 0 0;'>Visualiza y analiza componentes individuales del registro seleccionado.</p>
+                </div>
+            """, unsafe_allow_html=True)
+            
             # Selector de registro para vista individual
             selected_index = st.selectbox(
                 "Seleccionar registro para visualizar",
@@ -173,15 +302,54 @@ def main():
             
             selected_data = all_data[selected_index]
             metadata = selected_data['metadata']
-        
-            # Mostrar información relevante
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.metric("Frecuencia de muestreo", f"{metadata.get('sampling_rate', 'N/A')} Hz")
-            with col2:
-                st.metric("Sensor", metadata.get('sensor_name', 'N/A'))
-            with col3:
-                st.metric("Unidades", metadata.get('unit', 'm/s/s'))
+            
+            # Mostrar información relevante con mejor diseño
+            st.markdown("<h4 style='margin: 1rem 0;'>Información del Registro</h4>", unsafe_allow_html=True)
+            cols = st.columns(4)
+            with cols[0]:
+                st.metric(
+                    "Frecuencia de muestreo",
+                    f"{metadata.get('sampling_rate', 'N/A')} Hz",
+                    help="Frecuencia de muestreo del registro"
+                )
+            with cols[1]:
+                st.metric(
+                    "Sensor",
+                    metadata.get('sensor_name', 'N/A'),
+                    help="Nombre del sensor utilizado"
+                )
+            with cols[2]:
+                st.metric(
+                    "Unidades",
+                    metadata.get('unit', 'm/s/s'),
+                    help="Unidades de medición"
+                )
+            with cols[3]:
+                st.metric(
+                    "Duración",
+                    f"{selected_data['time'][-1]:.2f} s",
+                    help="Duración total del registro"
+                )
+                
+            # Agregar controles de zoom sincronizados
+            st.markdown("<h4 style='margin: 1rem 0;'>Controles de Visualización</h4>", unsafe_allow_html=True)
+            zoom_cols = st.columns(2)
+            with zoom_cols[0]:
+                zoom_start = st.number_input(
+                    "Tiempo inicial (s)",
+                    0.0,
+                    float(selected_data['time'][-1]),
+                    0.0,
+                    help="Selecciona el tiempo inicial para el zoom"
+                )
+            with zoom_cols[1]:
+                zoom_end = st.number_input(
+                    "Tiempo final (s)",
+                    zoom_start,
+                    float(selected_data['time'][-1]),
+                    float(selected_data['time'][-1]),
+                    help="Selecciona el tiempo final para el zoom"
+                )
             
             # Selector de unidades de visualización
             st.sidebar.subheader("Opciones de Visualización")
@@ -226,99 +394,276 @@ def main():
             colors = {
                 "E (Este-Oeste)": "#1f77b4",  # Azul
                 "N (Norte-Sur)": "#2ca02c",   # Verde
-                "Z (Vertical)": "#d62728"     # Rojo
+                "Z (Vertical)": "#d62728",     # Rojo
+                "Vector Suma": "#9467bd"       # Morado
             }
             
-            # Crear tres gráficos separados para cada componente
-            st.subheader("Componentes de " + title_prefix)
-            
-            # Componente Norte-Sur
+            # Configuración común para todos los gráficos
+            graph_config = {
+                "displayModeBar": True,
+                "displaylogo": False,
+                "modeBarButtonsToRemove": ["lasso2d", "select2d"],
+                "modeBarButtonsToAdd": [
+                    "drawopenpath",
+                    "eraseshape",
+                    "zoomIn2d",
+                    "zoomOut2d",
+                    "autoScale2d"
+                ],
+                "toImageButtonOptions": {
+                    "format": "png",
+                    "filename": "grafico",
+                    "height": 800,
+                    "width": 1200,
+                    "scale": 2
+                }
+            }
+
+            # Configuración común del layout
+            layout_config = {
+                "height": 350,
+                "margin": dict(l=50, r=20, t=40, b=30),
+                "showlegend": True,
+                "legend": dict(
+                    yanchor="top",
+                    y=0.99,
+                    xanchor="right",
+                    x=0.99,
+                    bgcolor="var(--legend-bg)",
+                    bordercolor="rgba(128, 128, 128, 0.3)",
+                    borderwidth=1,
+                    font=dict(color="var(--text-color)")
+                ),
+                "xaxis": dict(
+                    range=[zoom_start, zoom_end],
+                    rangeslider=dict(visible=True, thickness=0.1),
+                    title="Tiempo (s)",
+                    gridcolor="var(--grid-color)",
+                    showgrid=True,
+                    zeroline=True,
+                    zerolinecolor="var(--zero-line-color)",
+                    zerolinewidth=1,
+                    color="var(--text-color)"
+                ),
+                "plot_bgcolor": "var(--plot-bg)",
+                "paper_bgcolor": "var(--plot-bg)",
+                "font": dict(
+                    family="Arial, sans-serif",
+                    size=12,
+                    color="var(--text-color)"
+                ),
+                "hoverlabel": dict(
+                    bgcolor="var(--hover-bg)",
+                    font_size=12,
+                    font_family="Arial, sans-serif",
+                    font_color="var(--text-color)"
+                ),
+                "modebar": dict(
+                    bgcolor="var(--modebar-bg)",
+                    color="var(--modebar-color)",
+                    activecolor="var(--modebar-active)"
+                )
+            }
+
+            # Colores personalizados para cada componente
+            colors = {
+                "N (Norte-Sur)": "#1f77b4",    # Azul
+                "E (Este-Oeste)": "#2ca02c",   # Verde
+                "Z (Vertical)": "#d62728",     # Rojo
+                "Vector Suma": "#9467bd"       # Morado
+            }
+
+            # Crear gráficos para cada componente con la nueva configuración
+            st.markdown("""
+                <div class='info-container' style='background-color: var(--container-bg) !important; color: var(--text-color) !important;'>
+                    <h3 style='margin: 0; color: var(--text-color); background-color: var(--container-bg);'>Visualización de Componentes</h3>
+                    <p style='margin: 0.5rem 0 0 0; color: var(--secondary-text-color); background-color: var(--container-bg);'>Gráficos detallados de cada componente del registro sísmico.</p>
+                </div>
+            """, unsafe_allow_html=True)
+
+            # Componente Norte-Sur con mejoras visuales
             fig_ns = go.Figure()
             fig_ns.add_trace(go.Scatter(
                 x=selected_data['time'],
                 y=selected_data[f'N_{data_field_suffix}'] * conversion_factor,
                 mode='lines',
                 name="N (Norte-Sur)",
-                line=dict(color=colors["N (Norte-Sur)"])
+                line=dict(
+                    color=colors["N (Norte-Sur)"],
+                    width=2,
+                    shape='linear'
+                ),
+                hovertemplate="<b>Tiempo:</b> %{x:.2f}s<br><b>Valor:</b> %{y:.3f} " + unit_label
             ))
             
-            # Configuración del gráfico N-S
+            # Configuración específica para N-S
             max_val_ns = abs(selected_data[f'N_{data_field_suffix}']).max() * conversion_factor * 1.2
-            fig_ns.update_layout(
-                title=title_prefix + " Norte-Sur",
-                xaxis_title="Tiempo (s)",
-                yaxis_title=f"{title_prefix} ({unit_label})",
-                height=350,
-                margin=dict(l=0, r=0, t=40, b=0),
-                yaxis=dict(range=[-max_val_ns, max_val_ns])
-            )
-            st.plotly_chart(fig_ns, use_container_width=True)
+            layout_ns = layout_config.copy()
+            layout_ns.update({
+                "title": dict(
+                    text="<b>" + title_prefix + " Norte-Sur</b>",
+                    x=0.5,
+                    xanchor='center',
+                    font=dict(size=16)
+                ),
+                "yaxis": dict(
+                    title=dict(
+                        text=f"{title_prefix} ({unit_label})",
+                        standoff=10
+                    ),
+                    range=[-max_val_ns, max_val_ns],
+                    gridcolor="var(--grid-color)",
+                    showgrid=True,
+                    zeroline=True,
+                    zerolinecolor="var(--zero-line-color)",
+                    zerolinewidth=1,
+                    color="var(--text-color)"
+                )
+            })
+            fig_ns.update_layout(**layout_ns)
             
-            # Componente Este-Oeste
+            # Agregar anotaciones para valores máximos y mínimos
+            max_idx = np.argmax(abs(selected_data[f'N_{data_field_suffix}']))
+            max_time = selected_data['time'][max_idx]
+            max_value = selected_data[f'N_{data_field_suffix}'][max_idx] * conversion_factor
+            
+            fig_ns.add_annotation(
+                x=max_time,
+                y=max_value,
+                text=f"Max: {max_value:.2f} {unit_label}",
+                showarrow=True,
+                arrowhead=2,
+                arrowsize=1,
+                arrowwidth=2,
+                arrowcolor=colors["N (Norte-Sur)"],
+                bgcolor="var(--container-bg)",
+                bordercolor=colors["N (Norte-Sur)"],
+                borderwidth=1,
+                borderpad=4,
+                font=dict(size=10, color="var(--text-color)")
+            )
+            
+            st.plotly_chart(fig_ns, use_container_width=True, config=graph_config)
+            
+            # Componente Este-Oeste (similar configuración)
             fig_eo = go.Figure()
             fig_eo.add_trace(go.Scatter(
                 x=selected_data['time'],
                 y=selected_data[f'E_{data_field_suffix}'] * conversion_factor,
                 mode='lines',
                 name="E (Este-Oeste)",
-                line=dict(color=colors["E (Este-Oeste)"])
+                line=dict(
+                    color=colors["E (Este-Oeste)"],
+                    width=2,
+                    shape='linear'
+                ),
+                hovertemplate="<b>Tiempo:</b> %{x:.2f}s<br><b>Valor:</b> %{y:.3f} " + unit_label
             ))
             
-            # Configuración del gráfico E-O
             max_val_eo = abs(selected_data[f'E_{data_field_suffix}']).max() * conversion_factor * 1.2
             fig_eo.update_layout(
-                title=title_prefix + " Este-Oeste",
-                xaxis_title="Tiempo (s)",
-                yaxis_title=f"{title_prefix} ({unit_label})",
-                height=350,
-                margin=dict(l=0, r=0, t=40, b=0),
-                yaxis=dict(range=[-max_val_eo, max_val_eo])
+                title=dict(
+                    text="<b>" + title_prefix + " Este-Oeste</b>",
+                    x=0.5,
+                    xanchor='center',
+                    font=dict(size=16)
+                ),
+                **layout_config,
+                yaxis=dict(
+                    title=dict(
+                        text=f"{title_prefix} ({unit_label})",
+                        standoff=10
+                    ),
+                    range=[-max_val_eo, max_val_eo],
+                    gridcolor="var(--grid-color)",
+                    showgrid=True,
+                    zeroline=True,
+                    zerolinecolor="var(--zero-line-color)",
+                    zerolinewidth=1,
+                    color="var(--text-color)"
+                )
             )
-            st.plotly_chart(fig_eo, use_container_width=True)
+            st.plotly_chart(fig_eo, use_container_width=True, config=graph_config)
             
-            # Componente Vertical
+            # Componente Vertical (similar configuración)
             fig_z = go.Figure()
             fig_z.add_trace(go.Scatter(
                 x=selected_data['time'],
                 y=selected_data[f'Z_{data_field_suffix}'] * conversion_factor,
                 mode='lines',
                 name="Z (Vertical)",
-                line=dict(color=colors["Z (Vertical)"])
+                line=dict(
+                    color=colors["Z (Vertical)"],
+                    width=2,
+                    shape='linear'
+                ),
+                hovertemplate="<b>Tiempo:</b> %{x:.2f}s<br><b>Valor:</b> %{y:.3f} " + unit_label
             ))
             
-            # Configuración del gráfico Z
             max_val_z = abs(selected_data[f'Z_{data_field_suffix}']).max() * conversion_factor * 1.2
             fig_z.update_layout(
-                title=title_prefix + " Vertical",
-                xaxis_title="Tiempo (s)",
-                yaxis_title=f"{title_prefix} ({unit_label})",
-                height=350,
-                margin=dict(l=0, r=0, t=40, b=0),
-                yaxis=dict(range=[-max_val_z, max_val_z])
+                title=dict(
+                    text="<b>" + title_prefix + " Vertical</b>",
+                    x=0.5,
+                    xanchor='center',
+                    font=dict(size=16)
+                ),
+                **layout_config,
+                yaxis=dict(
+                    title=dict(
+                        text=f"{title_prefix} ({unit_label})",
+                        standoff=10
+                    ),
+                    range=[-max_val_z, max_val_z],
+                    gridcolor="var(--grid-color)",
+                    showgrid=True,
+                    zeroline=True,
+                    zerolinecolor="var(--zero-line-color)",
+                    zerolinewidth=1,
+                    color="var(--text-color)"
+                )
             )
-            st.plotly_chart(fig_z, use_container_width=True)
+            st.plotly_chart(fig_z, use_container_width=True, config=graph_config)
             
-            # Gráfico del Vector Suma (magnitud resultante)
+            # Vector Suma (similar configuración)
             fig_suma = go.Figure()
             fig_suma.add_trace(go.Scatter(
                 x=selected_data['time'],
                 y=selected_data[f'vector_suma_{data_field_suffix}'] * conversion_factor,
                 mode='lines',
                 name="Vector Suma",
-                line=dict(color="purple")
+                line=dict(
+                    color=colors["Vector Suma"],
+                    width=2,
+                    shape='linear'
+                ),
+                hovertemplate="<b>Tiempo:</b> %{x:.2f}s<br><b>Valor:</b> %{y:.3f} " + unit_label
             ))
             
-            # Configuración del gráfico Vector Suma
             max_val_suma = abs(selected_data[f'vector_suma_{data_field_suffix}']).max() * conversion_factor * 1.2
             fig_suma.update_layout(
-                title=f"Magnitud Resultante ({title_prefix})",
-                xaxis_title="Tiempo (s)",
-                yaxis_title=f"{title_prefix} ({unit_label})",
-                height=350,
-                margin=dict(l=0, r=0, t=40, b=0),
-                yaxis=dict(range=[0, max_val_suma])
+                title=dict(
+                    text=f"<b>Magnitud Resultante ({title_prefix})</b>",
+                    x=0.5,
+                    xanchor='center',
+                    font=dict(size=16)
+                ),
+                **layout_config,
+                yaxis=dict(
+                    title=dict(
+                        text=f"{title_prefix} ({unit_label})",
+                        standoff=10
+                    ),
+                    range=[0, max_val_suma],
+                    gridcolor="var(--grid-color)",
+                    showgrid=True,
+                    zeroline=True,
+                    zerolinecolor="var(--zero-line-color)",
+                    zerolinewidth=1,
+                    color="var(--text-color)"
+                )
             )
-            st.plotly_chart(fig_suma, use_container_width=True)
+            st.plotly_chart(fig_suma, use_container_width=True, config=graph_config)
             
             # Opciones adicionales para análisis
             st.subheader("Opciones adicionales para análisis")
@@ -387,151 +732,9 @@ def main():
                     )
                 )
                 
-                st.plotly_chart(fig1, use_container_width=True)
+                st.plotly_chart(fig1, use_container_width=True, config=graph_config)
             
         with tab2:
-            # Selector de unidades de visualización para comparación
-            st.sidebar.subheader("Unidades de Visualización (Comparación)")
-            display_unit_comp = st.sidebar.radio(
-                "Seleccionar unidad:",
-                ["m/s²", "g (9.81 m/s²)"],
-                key="display_unit_tab2"
-            )
-            
-            # Selector de tipo de datos a visualizar
-            data_type_comp = st.sidebar.radio(
-                "Tipo de datos:",
-                ["Aceleración", "Velocidad", "Desplazamiento"],
-                key="data_type_tab2"
-            )
-            
-            # Factor de conversión según la unidad seleccionada
-            conversion_factor_comp = 1.0 if display_unit_comp == "m/s²" else 1.0/9.81
-            
-            # Etiquetas de unidades según el tipo de datos
-            if data_type_comp == "Aceleración":
-                unit_label_comp = "m/s²" if display_unit_comp == "m/s²" else "g"
-                title_prefix_comp = "Aceleración"
-                data_field_suffix_comp = "aceleracion"
-            elif data_type_comp == "Velocidad":
-                unit_label_comp = "m/s"
-                title_prefix_comp = "Velocidad"
-                data_field_suffix_comp = "velocidad"
-            else:  # Desplazamiento
-                unit_label_comp = "m"
-                title_prefix_comp = "Desplazamiento"
-                data_field_suffix_comp = "desplazamiento"
-            
-            # Crear tres gráficos separados para cada componente (comparación)
-            st.subheader("Comparación de Componentes")
-            
-            # Componente Norte-Sur (Comparación)
-            fig_ns_comp = go.Figure()
-            
-            # Agregar cada registro seleccionado
-            for data in all_data:
-                fig_ns_comp.add_trace(go.Scatter(
-                    x=data['time'],
-                    y=data[f'N_{data_field_suffix_comp}'] * conversion_factor_comp,
-                    mode='lines',
-                    name=data['name']
-                ))
-            
-            # Calcular el rango del eje Y para la comparación
-            max_val_ns_comp = max([abs(data[f'N_{data_field_suffix_comp}']).max() * conversion_factor_comp for data in all_data]) * 1.2
-            
-            # Configuración del gráfico N-S (Comparación)
-            fig_ns_comp.update_layout(
-                title="Comparación de Componentes Norte-Sur",
-                xaxis_title="Tiempo (s)",
-                yaxis_title=f"{title_prefix_comp} ({unit_label_comp})",
-                height=350,
-                margin=dict(l=0, r=0, t=40, b=0),
-                yaxis=dict(range=[-max_val_ns_comp, max_val_ns_comp]),
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-            )
-            st.plotly_chart(fig_ns_comp, use_container_width=True)
-            
-            # Componente Este-Oeste (Comparación)
-            fig_eo_comp = go.Figure()
-            
-            # Agregar cada registro seleccionado
-            for data in all_data:
-                fig_eo_comp.add_trace(go.Scatter(
-                    x=data['time'],
-                    y=data[f'E_{data_field_suffix_comp}'] * conversion_factor_comp,
-                    mode='lines',
-                    name=data['name']
-                ))
-            
-            # Calcular el rango del eje Y para la comparación
-            max_val_eo_comp = max([abs(data[f'E_{data_field_suffix_comp}']).max() * conversion_factor_comp for data in all_data]) * 1.2
-            
-            # Configuración del gráfico E-O (Comparación)
-            fig_eo_comp.update_layout(
-                title="Comparación de Componentes Este-Oeste",
-                xaxis_title="Tiempo (s)",
-                yaxis_title=f"{title_prefix_comp} ({unit_label_comp})",
-                height=350,
-                margin=dict(l=0, r=0, t=40, b=0),
-                yaxis=dict(range=[-max_val_eo_comp, max_val_eo_comp]),
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-            )
-            st.plotly_chart(fig_eo_comp, use_container_width=True)
-            
-            # Componente Vertical (Comparación)
-            fig_z_comp = go.Figure()
-            
-            # Agregar cada registro seleccionado
-            for data in all_data:
-                fig_z_comp.add_trace(go.Scatter(
-                    x=data['time'],
-                    y=data[f'Z_{data_field_suffix_comp}'] * conversion_factor_comp,
-                    mode='lines',
-                    name=data['name']
-                ))
-            
-            # Calcular el rango del eje Y para la comparación
-            max_val_z_comp = max([abs(data[f'Z_{data_field_suffix_comp}']).max() * conversion_factor_comp for data in all_data]) * 1.2
-            
-            # Configuración del gráfico Z (Comparación)
-            fig_z_comp.update_layout(
-                title="Componente Vertical",
-                xaxis_title="Tiempo (s)",
-                yaxis_title=f"{title_prefix_comp} ({unit_label_comp})",
-                height=350,
-                margin=dict(l=0, r=0, t=40, b=0),
-                yaxis=dict(range=[-max_val_z_comp, max_val_z_comp]),
-                showlegend=True
-            )
-            st.plotly_chart(fig_z_comp, use_container_width=True)
-            
-            # Gráfico del Vector Suma (magnitud resultante) - Comparación
-            fig_suma_comp = go.Figure()
-            for data in all_data:
-                fig_suma_comp.add_trace(go.Scatter(
-                    x=data['time'],
-                    y=data[f'vector_suma_{data_field_suffix_comp}'] * conversion_factor_comp,
-                    mode='lines',
-                    name=data['name']
-                ))
-            
-            # Calcular el rango del eje Y para la comparación
-            max_val_suma_comp = max([abs(data[f'vector_suma_{data_field_suffix_comp}']).max() * conversion_factor_comp for data in all_data]) * 1.2
-            
-            # Configuración del gráfico Vector Suma (Comparación)
-            fig_suma_comp.update_layout(
-                title=f"Magnitud Resultante ({title_prefix_comp})",
-                xaxis_title="Tiempo (s)",
-                yaxis_title=f"{title_prefix_comp} ({unit_label_comp})",
-                height=350,
-                margin=dict(l=0, r=0, t=40, b=0),
-                yaxis=dict(range=[0, max_val_suma_comp]),
-                showlegend=True
-            )
-            st.plotly_chart(fig_suma_comp, use_container_width=True)
-
-        with tab3:
             # Selector de registro para análisis espectral
             selected_record_spectral = st.selectbox(
                 "Seleccionar registro para análisis espectral",
@@ -588,7 +791,7 @@ def main():
                     yaxis_type="log",
                     showlegend=True
                 )
-                st.plotly_chart(fig_fft, use_container_width=True)
+                st.plotly_chart(fig_fft, use_container_width=True, config=graph_config)
                 
             elif analysis_type == "Espectro de Potencia":
                 # Calcular el espectro de potencia
@@ -614,7 +817,7 @@ def main():
                     yaxis_type="log",
                     showlegend=True
                 )
-                st.plotly_chart(fig_power, use_container_width=True)
+                st.plotly_chart(fig_power, use_container_width=True, config=graph_config)
                 
             else:  # Autocorrelación
                 # Calcular la autocorrelación
@@ -637,9 +840,9 @@ def main():
                     yaxis_title="Coeficiente de Autocorrelación",
                     showlegend=True
                 )
-                st.plotly_chart(fig_autocorr, use_container_width=True)
+                st.plotly_chart(fig_autocorr, use_container_width=True, config=graph_config)
             
-        with tab4:
+        with tab3:
             # Selector de registro para filtrado
             if not selected_data:
                 st.info("Por favor, seleccione un registro en la vista individual primero")
@@ -742,7 +945,7 @@ def main():
                 showlegend=True
             )
             
-            st.plotly_chart(fig_response, use_container_width=True)
+            st.plotly_chart(fig_response, use_container_width=True, config=graph_config)
 
             # Mostrar señal original vs filtrada
             st.subheader("Comparación: Original vs Filtrada")
@@ -772,9 +975,9 @@ def main():
                 height=400
             )
             
-            st.plotly_chart(fig_compare, use_container_width=True)
+            st.plotly_chart(fig_compare, use_container_width=True, config=graph_config)
 
-        with tab5:
+        with tab4:
             # Selector de registro para detección de eventos
             if not selected_data:
                 st.info("Por favor, seleccione un registro en la vista individual primero")
@@ -884,7 +1087,7 @@ def main():
                         yaxis_title="Ratio",
                         height=300
                     )
-                    st.plotly_chart(fig_ratio, use_container_width=True)
+                    st.plotly_chart(fig_ratio, use_container_width=True, config=graph_config)
                 else:
                     peaks, properties = detector.peak_detection(
                         data,
@@ -942,7 +1145,7 @@ def main():
                         )
                 
                 # Mostrar gráfico
-                st.plotly_chart(fig_events, use_container_width=True)
+                st.plotly_chart(fig_events, use_container_width=True, config=graph_config)
                 
                 # Mostrar lista de eventos
                 if len(events) > 0:
@@ -968,7 +1171,7 @@ def main():
             # Agregar información adicional
             st.markdown("### Información del Registro")
             
-        with tab6:
+        with tab5:
             # Selector de registro para exportación
             if not selected_data:
                 st.info("Por favor, seleccione un registro en la vista individual primero")
@@ -1096,7 +1299,7 @@ def main():
                 ]
             )
         
-        with tab7:
+        with tab6:
             st.subheader("Espectro de Respuesta")
             
             # Selector de registro para espectro de respuesta
@@ -1181,7 +1384,7 @@ def main():
                         yaxis_type="log",
                         showlegend=True
                     )
-                    st.plotly_chart(fig_sa, use_container_width=True)
+                    st.plotly_chart(fig_sa, use_container_width=True, config=graph_config)
                 
                 with col2:
                     # Espectro de pseudo-velocidad
@@ -1201,7 +1404,7 @@ def main():
                         yaxis_type="log",
                         showlegend=True
                     )
-                    st.plotly_chart(fig_sv, use_container_width=True)
+                    st.plotly_chart(fig_sv, use_container_width=True, config=graph_config)
                 
                 # Espectro de desplazamiento
                 fig_sd = go.Figure()
@@ -1220,7 +1423,7 @@ def main():
                     yaxis_type="log",
                     showlegend=True
                 )
-                st.plotly_chart(fig_sd, use_container_width=True)
+                st.plotly_chart(fig_sd, use_container_width=True, config=graph_config)
                 
             else:  # Análisis Combinado
                 # Método de combinación
@@ -1297,7 +1500,7 @@ def main():
                         yaxis_type="log",
                         showlegend=True
                     )
-                    st.plotly_chart(fig_sa_comb, use_container_width=True)
+                    st.plotly_chart(fig_sa_comb, use_container_width=True, config=graph_config)
                 
                 with col2:
                     # Espectro de pseudo-velocidad combinado
@@ -1341,7 +1544,7 @@ def main():
                         yaxis_type="log",
                         showlegend=True
                     )
-                    st.plotly_chart(fig_sv_comb, use_container_width=True)
+                    st.plotly_chart(fig_sv_comb, use_container_width=True, config=graph_config)
                 
                 # Espectro de desplazamiento combinado
                 fig_sd_comb = go.Figure()
@@ -1384,7 +1587,7 @@ def main():
                     yaxis_type="log",
                     showlegend=True
                 )
-                st.plotly_chart(fig_sd_comb, use_container_width=True)
+                st.plotly_chart(fig_sd_comb, use_container_width=True, config=graph_config)
             
     except Exception as e:
         st.error(f"Error al procesar los archivos: {str(e)}")
