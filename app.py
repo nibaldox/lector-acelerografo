@@ -8,6 +8,7 @@ import shutil
 import zipfile
 import io
 from ms_reader import MSReader
+from signal_processor import SignalProcessor
 
 st.set_page_config(
     page_title="Visor de Acelerógrafos",
@@ -132,6 +133,20 @@ def main():
             reader = MSReader(ms_path)
             data = reader.read_data()
             data['name'] = os.path.basename(ms_path)
+            
+            # Procesar datos para obtener velocidad y desplazamiento
+            sampling_rate = float(data['metadata'].get('sampling_rate', 100))
+            signal_processor = SignalProcessor(sampling_rate)
+            
+            # Procesar cada componente
+            for component in ['N', 'E', 'Z']:
+                processed_data = signal_processor.process_acceleration_data(
+                    data[component], 
+                    data['time']
+                )
+                data[f'{component}_velocity'] = processed_data['velocity']
+                data[f'{component}_displacement'] = processed_data['displacement']
+            
             all_data.append(data)
         
         # Crear pestañas para diferentes vistas
@@ -158,16 +173,33 @@ def main():
                 st.metric("Unidades", metadata.get('unit', 'm/s/s'))
             
             # Selector de unidades de visualización
-            st.sidebar.subheader("Unidades de Visualización")
+            st.sidebar.subheader("Opciones de Visualización")
             display_unit = st.sidebar.radio(
                 "Seleccionar unidad:",
                 ["m/s²", "g (9.81 m/s²)"],
                 key="display_unit_tab1"
             )
             
+            # Selector de tipo de datos a visualizar
+            data_type = st.sidebar.radio(
+                "Tipo de datos:",
+                ["Aceleración", "Velocidad", "Desplazamiento"],
+                key="data_type_tab1"
+            )
+            
             # Factor de conversión según la unidad seleccionada
             conversion_factor = 1.0 if display_unit == "m/s²" else 1.0/9.81
-            unit_label = "m/s²" if display_unit == "m/s²" else "g"
+            
+            # Etiquetas de unidades según el tipo de datos
+            if data_type == "Aceleración":
+                unit_label = "m/s²" if display_unit == "m/s²" else "g"
+                title_prefix = "Aceleración"
+            elif data_type == "Velocidad":
+                unit_label = "m/s"
+                title_prefix = "Velocidad"
+            else:  # Desplazamiento
+                unit_label = "m"
+                title_prefix = "Desplazamiento"
             
             # Mapeo de nombres legibles a claves de datos
             component_map = {
@@ -184,24 +216,24 @@ def main():
             }
             
             # Crear tres gráficos separados para cada componente
-            st.subheader("Componentes de Aceleración")
+            st.subheader("Componentes de " + title_prefix)
             
             # Componente Norte-Sur
             fig_ns = go.Figure()
             fig_ns.add_trace(go.Scatter(
                 x=selected_data['time'],
-                y=selected_data['N'] * conversion_factor,
+                y=selected_data[f'N_{data_type.lower()}'] * conversion_factor,
                 mode='lines',
                 name="N (Norte-Sur)",
                 line=dict(color=colors["N (Norte-Sur)"])
             ))
             
             # Configuración del gráfico N-S
-            max_val_ns = abs(selected_data['N']).max() * conversion_factor * 1.2
+            max_val_ns = abs(selected_data[f'N_{data_type.lower()}']).max() * conversion_factor * 1.2
             fig_ns.update_layout(
-                title="Componente Norte-Sur",
+                title=title_prefix + " Norte-Sur",
                 xaxis_title="Tiempo (s)",
-                yaxis_title=f"Aceleración ({unit_label})",
+                yaxis_title=f"{title_prefix} ({unit_label})",
                 height=350,
                 margin=dict(l=0, r=0, t=40, b=0),
                 yaxis=dict(range=[-max_val_ns, max_val_ns])
@@ -212,18 +244,18 @@ def main():
             fig_eo = go.Figure()
             fig_eo.add_trace(go.Scatter(
                 x=selected_data['time'],
-                y=selected_data['E'] * conversion_factor,
+                y=selected_data[f'E_{data_type.lower()}'] * conversion_factor,
                 mode='lines',
                 name="E (Este-Oeste)",
                 line=dict(color=colors["E (Este-Oeste)"])
             ))
             
             # Configuración del gráfico E-O
-            max_val_eo = abs(selected_data['E']).max() * conversion_factor * 1.2
+            max_val_eo = abs(selected_data[f'E_{data_type.lower()}']).max() * conversion_factor * 1.2
             fig_eo.update_layout(
-                title="Componente Este-Oeste",
+                title=title_prefix + " Este-Oeste",
                 xaxis_title="Tiempo (s)",
-                yaxis_title=f"Aceleración ({unit_label})",
+                yaxis_title=f"{title_prefix} ({unit_label})",
                 height=350,
                 margin=dict(l=0, r=0, t=40, b=0),
                 yaxis=dict(range=[-max_val_eo, max_val_eo])
@@ -234,18 +266,18 @@ def main():
             fig_z = go.Figure()
             fig_z.add_trace(go.Scatter(
                 x=selected_data['time'],
-                y=selected_data['Z'] * conversion_factor,
+                y=selected_data[f'Z_{data_type.lower()}'] * conversion_factor,
                 mode='lines',
                 name="Z (Vertical)",
                 line=dict(color=colors["Z (Vertical)"])
             ))
             
             # Configuración del gráfico Z
-            max_val_z = abs(selected_data['Z']).max() * conversion_factor * 1.2
+            max_val_z = abs(selected_data[f'Z_{data_type.lower()}']).max() * conversion_factor * 1.2
             fig_z.update_layout(
-                title="Componente Vertical",
+                title=title_prefix + " Vertical",
                 xaxis_title="Tiempo (s)",
-                yaxis_title=f"Aceleración ({unit_label})",
+                yaxis_title=f"{title_prefix} ({unit_label})",
                 height=350,
                 margin=dict(l=0, r=0, t=40, b=0),
                 yaxis=dict(range=[-max_val_z, max_val_z])
@@ -270,7 +302,7 @@ def main():
                 key = component_map[component]
                 fig1.add_trace(go.Scatter(
                     x=selected_data['time'],
-                    y=selected_data[key] * conversion_factor,
+                    y=selected_data[f'{key}_{data_type.lower()}'] * conversion_factor,
                     mode='lines',
                     name=component,
                     line=dict(color=colors[component])
@@ -280,14 +312,14 @@ def main():
             max_vals = []
             for component in components:
                 key = component_map[component]
-                max_vals.append(abs(selected_data[key]).max() * conversion_factor)
+                max_vals.append(abs(selected_data[f'{key}_{data_type.lower()}']).max() * conversion_factor)
             y_max = max(max_vals) * 2  # Duplicar el valor máximo para el rango
 
             # Configuración del gráfico individual
             fig1.update_layout(
-                title=f"Registro de Aceleración - {selected_data['name']}",
+                title=f"Registro de {title_prefix} - {selected_data['name']}",
                 xaxis_title="Tiempo (s)",
-                yaxis_title=f"Aceleración ({unit_label})",
+                yaxis_title=f"{title_prefix} ({unit_label})",
                 showlegend=True,
                 height=600,
                 xaxis=dict(
@@ -295,7 +327,7 @@ def main():
                     type="linear"
                 ),
                 yaxis=dict(
-                    title=f"Aceleración ({unit_label})",
+                    title=f"{title_prefix} ({unit_label})",
                     exponentformat='e',
                     showexponent='all',
                     tickformat='.2e',
@@ -314,9 +346,26 @@ def main():
                 key="display_unit_tab2"
             )
             
+            # Selector de tipo de datos a visualizar
+            data_type_comp = st.sidebar.radio(
+                "Tipo de datos:",
+                ["Aceleración", "Velocidad", "Desplazamiento"],
+                key="data_type_tab2"
+            )
+            
             # Factor de conversión según la unidad seleccionada
             conversion_factor_comp = 1.0 if display_unit_comp == "m/s²" else 1.0/9.81
-            unit_label_comp = "m/s²" if display_unit_comp == "m/s²" else "g"
+            
+            # Etiquetas de unidades según el tipo de datos
+            if data_type_comp == "Aceleración":
+                unit_label_comp = "m/s²" if display_unit_comp == "m/s²" else "g"
+                title_prefix_comp = "Aceleración"
+            elif data_type_comp == "Velocidad":
+                unit_label_comp = "m/s"
+                title_prefix_comp = "Velocidad"
+            else:  # Desplazamiento
+                unit_label_comp = "m"
+                title_prefix_comp = "Desplazamiento"
             
             # Crear tres gráficos separados para cada componente (comparación)
             st.subheader("Comparación de Componentes")
@@ -328,19 +377,19 @@ def main():
             for data in all_data:
                 fig_ns_comp.add_trace(go.Scatter(
                     x=data['time'],
-                    y=data['N'] * conversion_factor_comp,
+                    y=data[f'N_{data_type_comp.lower()}'] * conversion_factor_comp,
                     mode='lines',
                     name=data['name']
                 ))
             
             # Calcular el rango del eje Y para la comparación
-            max_val_ns_comp = max([abs(data['N']).max() * conversion_factor_comp for data in all_data]) * 1.2
+            max_val_ns_comp = max([abs(data[f'N_{data_type_comp.lower()}']).max() * conversion_factor_comp for data in all_data]) * 1.2
             
             # Configuración del gráfico N-S (Comparación)
             fig_ns_comp.update_layout(
                 title="Comparación de Componentes Norte-Sur",
                 xaxis_title="Tiempo (s)",
-                yaxis_title=f"Aceleración ({unit_label_comp})",
+                yaxis_title=f"{title_prefix_comp} ({unit_label_comp})",
                 height=350,
                 margin=dict(l=0, r=0, t=40, b=0),
                 yaxis=dict(range=[-max_val_ns_comp, max_val_ns_comp]),
@@ -355,19 +404,19 @@ def main():
             for data in all_data:
                 fig_eo_comp.add_trace(go.Scatter(
                     x=data['time'],
-                    y=data['E'] * conversion_factor_comp,
+                    y=data[f'E_{data_type_comp.lower()}'] * conversion_factor_comp,
                     mode='lines',
                     name=data['name']
                 ))
             
             # Calcular el rango del eje Y para la comparación
-            max_val_eo_comp = max([abs(data['E']).max() * conversion_factor_comp for data in all_data]) * 1.2
+            max_val_eo_comp = max([abs(data[f'E_{data_type_comp.lower()}']).max() * conversion_factor_comp for data in all_data]) * 1.2
             
             # Configuración del gráfico E-O (Comparación)
             fig_eo_comp.update_layout(
                 title="Comparación de Componentes Este-Oeste",
                 xaxis_title="Tiempo (s)",
-                yaxis_title=f"Aceleración ({unit_label_comp})",
+                yaxis_title=f"{title_prefix_comp} ({unit_label_comp})",
                 height=350,
                 margin=dict(l=0, r=0, t=40, b=0),
                 yaxis=dict(range=[-max_val_eo_comp, max_val_eo_comp]),
@@ -382,19 +431,19 @@ def main():
             for data in all_data:
                 fig_z_comp.add_trace(go.Scatter(
                     x=data['time'],
-                    y=data['Z'] * conversion_factor_comp,
+                    y=data[f'Z_{data_type_comp.lower()}'] * conversion_factor_comp,
                     mode='lines',
                     name=data['name']
                 ))
             
             # Calcular el rango del eje Y para la comparación
-            max_val_z_comp = max([abs(data['Z']).max() * conversion_factor_comp for data in all_data]) * 1.2
+            max_val_z_comp = max([abs(data[f'Z_{data_type_comp.lower()}']).max() * conversion_factor_comp for data in all_data]) * 1.2
             
             # Configuración del gráfico Z (Comparación)
             fig_z_comp.update_layout(
                 title="Comparación de Componentes Verticales",
                 xaxis_title="Tiempo (s)",
-                yaxis_title=f"Aceleración ({unit_label_comp})",
+                yaxis_title=f"{title_prefix_comp} ({unit_label_comp})",
                 height=350,
                 margin=dict(l=0, r=0, t=40, b=0),
                 yaxis=dict(range=[-max_val_z_comp, max_val_z_comp]),
