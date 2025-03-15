@@ -28,3 +28,9 @@ exports/
 # Archivos del sistema operativo
 .DS_Store
 Thumbs.db
+
+# Archivos específicos del proyecto
+# Archivos de seguimiento y documentación local
+plan_seguimiento.txt
+*_seguimiento.txt
+*.pdf

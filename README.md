@@ -15,6 +15,7 @@ Aplicación web para visualizar y analizar datos de acelerógrafos, desarrollada
   - Espectrogramas
   - Configuración de ventanas y parámetros
   - Visualización en escala logarítmica
+  - Análisis de respuesta combinada (SRSS y Porcentual)
 
 - **Filtros Interactivos**
   - Filtros pasa bajos/altos
