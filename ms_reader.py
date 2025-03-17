@@ -36,7 +36,7 @@ class MSReader:
             samples = samples_per_channel  # Número de muestras por canal
             
             # Leer configuración del archivo .ss
-            ss_file_path = self.file_path.replace('.ms', '.ss')
+            ss_file_path = str(self.file_path).replace('.ms', '.ss')
             metadata = {}
             try:
                 with open(ss_file_path, 'r') as f:

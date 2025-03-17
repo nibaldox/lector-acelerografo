@@ -9,6 +9,9 @@ Aplicación web para visualizar y analizar datos de acelerógrafos, desarrollada
   - Comparación múltiple de registros
   - Control de zoom y navegación temporal
   - Escalas y unidades calibradas
+  - Gráficos con fondos transparentes y diseño consistente
+  - Anotaciones de valores máximos
+  - Visualización del vector suma
 
 - **Análisis Espectral**
   - Transformada de Fourier (FFT)
@@ -34,6 +37,13 @@ Aplicación web para visualizar y analizar datos de acelerógrafos, desarrollada
   - Resultados de análisis
   - Gráficos (HTML, PNG, JSON)
 
+- **Soporte para Múltiples Formatos**
+  - MS/SS (formato propietario de acelerógrafos)
+  - SAC (Seismic Analysis Code)
+  - miniSEED
+  - SEG-Y
+  - ASCII (txt, csv, dat, asc)
+
 ## Requisitos
 
 ```bash
@@ -42,53 +52,54 @@ numpy
 pandas
 plotly
 scipy
+obspy (opcional, para formatos miniSEED y SEG-Y)
 ```
 
 ## Instalación
 
 1. Clonar el repositorio:
 
-```bash
-git clone <url-repositorio>
-cd visor-acelerografos
-```
+   ```bash
+   git clone <url-repositorio>
+   cd visor-acelerografos
+   ```
 
 2. Crear y activar entorno virtual (opcional):
 
-```bash
-python -m venv venv
-source venv/bin/activate  # Linux/Mac
-venv\Scripts\activate     # Windows
-```
+   ```bash
+   python -m venv venv
+   source venv/bin/activate  # Linux/Mac
+   venv\Scripts\activate     # Windows
+   ```
 
 3. Instalar dependencias:
 
-```bash
-pip install -r requirements.txt
-```
+   ```bash
+   pip install -r requirements.txt
+   ```
 
 ## Uso
 
 1. Ejecutar la aplicación:
 
-```bash
-streamlit run app.py
-```
+   ```bash
+   streamlit run app.py
+   ```
 
 2. Acceder a través del navegador:
 
-```
-http://localhost:8501
-```
+   ```bash
+   http://localhost:8501
+   ```
 
-3. Cargar datos de acelerógrafos:
+3. Cargar datos sísmicos:
 
    - **Opción 1: Archivos Individuales**
-     - Seleccione los archivos .ms y .ss correspondientes
-     - Asegúrese de subir ambos archivos para cada registro
+     - Seleccione los archivos en cualquiera de los formatos soportados
+     - Para archivos MS/SS, asegúrese de subir ambos archivos para cada registro
 
    - **Opción 2: Carpeta Completa (ZIP)**
-     - Comprima la carpeta que contiene los archivos .ms/.ss en un archivo ZIP
+     - Comprima la carpeta que contiene los archivos en un archivo ZIP
      - Suba el archivo ZIP mediante el selector correspondiente
      - La aplicación procesará automáticamente toda la estructura de directorios
      - Se mantendrá la jerarquía original de archivos y subcarpetas
@@ -100,20 +111,43 @@ http://localhost:8501
 ### Módulos Principales
 
 #### `app.py` - Aplicación Principal
+
 - Interfaz gráfica desarrollada con Streamlit
 - Visualización interactiva de señales
 - Integración de todos los módulos de análisis
 - Navegación mediante pestañas para diferentes funcionalidades
 - Personalización de parámetros en tiempo real
 
-#### `ms_reader.py` - Lectura de Datos
-- Lectura de archivos binarios .ms de acelerógrafos
-- Interpretación de archivos de configuración .ss
-- Calibración y conversión de unidades
+#### `format_readers.py` - Lectura de Múltiples Formatos
+
+- Arquitectura modular con clase base `BaseReader`
+- Lectores específicos para cada formato:
+  - `MSReader`: Formato propietario MS/SS
+  - `SACReader`: Formato SAC (Seismic Analysis Code)
+  - `MiniSEEDReader`: Formato miniSEED
+  - `SEGYReader`: Formato SEG-Y
+  - `ASCIIReader`: Formatos de texto (CSV, TXT, DAT, ASC)
 - Extracción de metadata y parámetros del sensor
 - Manejo de múltiples canales (E, N, Z)
+- Detección automática del formato basada en extensión
+
+#### `signal_processor.py` - Procesamiento de Señales
+
+- Cálculo de velocidad y desplazamiento a partir de aceleración
+- Filtrado de señales
+- Cálculo del vector suma
+- Cálculo de espectros de respuesta
+- Análisis estadístico de señales
+
+#### `report_generator.py` - Generación de Informes
+
+- Creación de informes en múltiples formatos (PDF, HTML, DOCX)
+- Inclusión de gráficos y resultados de análisis
+- Personalización de plantillas
+- Exportación de datos y metadatos
 
 #### `fft_processor.py` - Análisis Espectral
+
 - Transformada rápida de Fourier (FFT)
 - Cálculo de espectrogramas
 - Ventanas configurables (Hann, Hamming, Blackman)
@@ -121,6 +155,7 @@ http://localhost:8501
 - Promediado de segmentos para reducción de ruido
 
 #### `filters.py` - Procesamiento de Señales
+
 - Filtros digitales Butterworth
 - Configuración de filtros paso bajo/alto/banda
 - Visualización de respuesta en frecuencia
@@ -128,6 +163,7 @@ http://localhost:8501
 - Frecuencias de corte configurables
 
 #### `event_detector.py` - Detección de Eventos
+
 - Algoritmo STA/LTA para detección automática
 - Detección basada en umbral y picos
 - Cálculo de características de eventos
@@ -135,6 +171,7 @@ http://localhost:8501
 - Métricas de eventos (amplitud, RMS, energía)
 
 #### `data_exporter.py` - Exportación de Datos
+
 - Exportación en múltiples formatos (CSV, Excel, JSON)
 - Guardado de gráficos (HTML, PNG)
 - Exportación de resultados de análisis
@@ -144,20 +181,26 @@ http://localhost:8501
 ## Herramientas y Funcionalidades
 
 ### 1. Visualización de Datos
+
 - **Vista Individual**
   - Visualización de componentes E, N, Z
   - Escala automática y manual
   - Control de zoom y navegación temporal
   - Información de metadata y calibración
   - Rangeslider para navegación rápida
+  - Anotaciones de valores máximos
+  - Gráficos con fondos transparentes
+  - Visualización del vector suma
 
 - **Vista Comparativa**
   - Comparación de múltiples registros
   - Alineación temporal de señales
   - Normalización opcional de amplitudes
   - Leyendas y etiquetas personalizables
+  - Selección múltiple de componentes
 
 ### 2. Análisis Espectral
+
 - **Transformada de Fourier**
   - Selección de ventana de análisis
   - Configuración de segmentos y superposición
@@ -173,6 +216,7 @@ http://localhost:8501
   - Zoom y navegación interactiva
 
 ### 3. Filtros Digitales
+
 - **Tipos de Filtros**
   - Paso bajo: Elimina altas frecuencias
   - Paso alto: Elimina bajas frecuencias
@@ -186,6 +230,7 @@ http://localhost:8501
   - Comparación antes/después
 
 ### 4. Detección de Eventos
+
 - **Método STA/LTA**
   - Ventanas corta/larga configurables
   - Ratio de disparo ajustable
@@ -201,6 +246,7 @@ http://localhost:8501
   - Filtrado de falsos positivos
 
 ### 5. Exportación de Datos
+
 - **Formatos Soportados**
   - CSV: Datos crudos y procesados
   - Excel: Hojas múltiples con metadata
