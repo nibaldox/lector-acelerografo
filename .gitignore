@@ -34,3 +34,10 @@ Thumbs.db
 plan_seguimiento.txt
 *_seguimiento.txt
 *.pdf
+
+# Archivos de prueba y cobertura
+.coverage
+.coveragerc
+pytest.ini
+logs/
+*.png

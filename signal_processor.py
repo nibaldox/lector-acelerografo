@@ -1,26 +1,51 @@
 import numpy as np
 from scipy import signal
 from filters import SignalFilter
+from logger import get_logger
+from data_models import SeismicRecord, SeismicComponent
+import time as time_module
 
 class SignalProcessor:
     def __init__(self, sampling_rate):
         """
         Inicializa el procesador de señales
+        
         Args:
-            sampling_rate: Frecuencia de muestreo en Hz
+            sampling_rate (float): Frecuencia de muestreo en Hz
         """
         self.fs = sampling_rate
         self.filter = SignalFilter(sampling_rate)
+        self.logger = get_logger("SignalProcessor")
+        self.logger.info(f"Inicializando SignalProcessor con frecuencia de muestreo {sampling_rate} Hz")
         
     def remove_baseline(self, data, polynomial_order=3):
         """
         Elimina la tendencia de línea base usando un ajuste polinomial
+        
         Args:
-            data: Array de datos de entrada
-            polynomial_order: Orden del polinomio para el ajuste
+            data (numpy.ndarray): Array de datos de entrada
+            polynomial_order (int): Orden del polinomio para el ajuste
+            
         Returns:
-            corrected_data: Datos con línea base corregida
+            numpy.ndarray: Datos con línea base corregida
+            
+        Raises:
+            ValueError: Si los datos de entrada no son válidos
         """
+        if data is None or len(data) == 0:
+            self.logger.error("Los datos de entrada para remove_baseline son nulos o vacíos")
+            raise ValueError("Los datos de entrada no pueden ser nulos o vacíos")
+            
+        if polynomial_order < 1:
+            self.logger.warning(f"Orden de polinomio inválido: {polynomial_order}. Usando valor por defecto 3.")
+            polynomial_order = 3
+            
+        if polynomial_order >= len(data):
+            self.logger.warning(f"Orden de polinomio ({polynomial_order}) mayor que longitud de datos ({len(data)}). Reduciendo orden.")
+            polynomial_order = min(3, len(data) - 1)
+        
+        start_time = time_module.time()
+        
         # Crear array de tiempo normalizado para mejor estabilidad numérica
         t = np.linspace(0, 1, len(data))
         
@@ -31,18 +56,40 @@ class SignalProcessor:
         # Restar línea base
         corrected_data = data - baseline
         
+        end_time = time_module.time()
+        self.logger.debug(f"Corrección de línea base completada en {end_time - start_time:.4f} segundos")
+        
         return corrected_data
     
     def integrate_acceleration(self, acceleration, time, highpass_freq=0.1):
         """
         Integra aceleración para obtener velocidad con corrección de línea base
+        
         Args:
-            acceleration: Array de datos de aceleración
-            time: Array de tiempo correspondiente
-            highpass_freq: Frecuencia de corte para filtro pasa altos (Hz)
+            acceleration (numpy.ndarray): Array de datos de aceleración
+            time (numpy.ndarray): Array de tiempo correspondiente
+            highpass_freq (float): Frecuencia de corte para filtro pasa altos (Hz)
+            
         Returns:
-            velocity: Array de velocidad integrada
+            numpy.ndarray: Array de velocidad integrada
+            
+        Raises:
+            ValueError: Si los datos de entrada no son válidos
         """
+        if acceleration is None or len(acceleration) == 0:
+            self.logger.error("Los datos de aceleración son nulos o vacíos")
+            raise ValueError("Los datos de aceleración no pueden ser nulos o vacíos")
+            
+        if time is None or len(time) == 0:
+            self.logger.error("Los datos de tiempo son nulos o vacíos")
+            raise ValueError("Los datos de tiempo no pueden ser nulos o vacíos")
+            
+        if len(acceleration) != len(time):
+            self.logger.error(f"Longitud de aceleración ({len(acceleration)}) y tiempo ({len(time)}) no coinciden")
+            raise ValueError("Los arrays de aceleración y tiempo deben tener la misma longitud")
+        
+        start_time = time_module.time()
+        
         # Remover línea base
         acc_corrected = self.remove_baseline(acceleration)
         
@@ -53,29 +100,52 @@ class SignalProcessor:
             cutoff=highpass_freq
         )
         
-        # Integración trapezoidal
+        # Integración trapezoidal vectorizada
         dt = time[1] - time[0]  # Intervalo de tiempo
-        velocity = np.zeros_like(acc_filtered)
         
-        # Método trapezoidal: v(n) = v(n-1) + (a(n) + a(n-1))*dt/2
-        for i in range(1, len(velocity)):
-            velocity[i] = velocity[i-1] + (acc_filtered[i] + acc_filtered[i-1]) * dt / 2
+        # Método trapezoidal vectorizado
+        # v(n) = v(n-1) + (a(n) + a(n-1))*dt/2
+        cumulative_term = (acc_filtered[1:] + acc_filtered[:-1]) * dt / 2
+        velocity = np.zeros_like(acc_filtered)
+        velocity[1:] = np.cumsum(cumulative_term)
         
         # Corrección de línea base para la velocidad
         velocity = self.remove_baseline(velocity)
+        
+        end_time = time_module.time()
+        self.logger.debug(f"Integración de aceleración completada en {end_time - start_time:.4f} segundos")
         
         return velocity
     
     def integrate_velocity(self, velocity, time, highpass_freq=0.05):
         """
         Integra velocidad para obtener desplazamiento con corrección de línea base
+        
         Args:
-            velocity: Array de datos de velocidad
-            time: Array de tiempo correspondiente
-            highpass_freq: Frecuencia de corte para filtro pasa altos (Hz)
+            velocity (numpy.ndarray): Array de datos de velocidad
+            time (numpy.ndarray): Array de tiempo correspondiente
+            highpass_freq (float): Frecuencia de corte para filtro pasa altos (Hz)
+            
         Returns:
-            displacement: Array de desplazamiento integrado
+            numpy.ndarray: Array de desplazamiento integrado
+            
+        Raises:
+            ValueError: Si los datos de entrada no son válidos
         """
+        if velocity is None or len(velocity) == 0:
+            self.logger.error("Los datos de velocidad son nulos o vacíos")
+            raise ValueError("Los datos de velocidad no pueden ser nulos o vacíos")
+            
+        if time is None or len(time) == 0:
+            self.logger.error("Los datos de tiempo son nulos o vacíos")
+            raise ValueError("Los datos de tiempo no pueden ser nulos o vacíos")
+            
+        if len(velocity) != len(time):
+            self.logger.error(f"Longitud de velocidad ({len(velocity)}) y tiempo ({len(time)}) no coinciden")
+            raise ValueError("Los arrays de velocidad y tiempo deben tener la misma longitud")
+        
+        start_time = time_module.time()
+        
         # Remover línea base
         vel_corrected = self.remove_baseline(velocity)
         
@@ -86,33 +156,61 @@ class SignalProcessor:
             cutoff=highpass_freq
         )
         
-        # Integración trapezoidal
+        # Integración trapezoidal vectorizada
         dt = time[1] - time[0]  # Intervalo de tiempo
-        displacement = np.zeros_like(vel_filtered)
         
-        # Método trapezoidal: d(n) = d(n-1) + (v(n) + v(n-1))*dt/2
-        for i in range(1, len(displacement)):
-            displacement[i] = displacement[i-1] + (vel_filtered[i] + vel_filtered[i-1]) * dt / 2
+        # Método trapezoidal vectorizado
+        # d(n) = d(n-1) + (v(n) + v(n-1))*dt/2
+        cumulative_term = (vel_filtered[1:] + vel_filtered[:-1]) * dt / 2
+        displacement = np.zeros_like(vel_filtered)
+        displacement[1:] = np.cumsum(cumulative_term)
         
         # Corrección de línea base para el desplazamiento
         displacement = self.remove_baseline(displacement)
+        
+        end_time = time_module.time()
+        self.logger.debug(f"Integración de velocidad completada en {end_time - start_time:.4f} segundos")
         
         return displacement
     
     def process_acceleration_data(self, acceleration, time):
         """
         Procesa datos de aceleración para obtener velocidad y desplazamiento
+        
         Args:
-            acceleration: Array de datos de aceleración
-            time: Array de tiempo correspondiente
+            acceleration (numpy.ndarray): Array de datos de aceleración
+            time (numpy.ndarray): Array de tiempo correspondiente
+            
         Returns:
             dict: Diccionario con arrays de aceleración, velocidad y desplazamiento
+            
+        Raises:
+            ValueError: Si los datos de entrada no son válidos
         """
+        if acceleration is None or len(acceleration) == 0:
+            self.logger.error("Los datos de aceleración son nulos o vacíos")
+            raise ValueError("Los datos de aceleración no pueden ser nulos o vacíos")
+            
+        if time is None or len(time) == 0:
+            self.logger.error("Los datos de tiempo son nulos o vacíos")
+            raise ValueError("Los datos de tiempo no pueden ser nulos o vacíos")
+            
+        if len(acceleration) != len(time):
+            self.logger.error(f"Longitud de aceleración ({len(acceleration)}) y tiempo ({len(time)}) no coinciden")
+            raise ValueError("Los arrays de aceleración y tiempo deben tener la misma longitud")
+        
+        start_time = time_module.time()
+        
         # Integrar aceleración para obtener velocidad
+        self.logger.info("Integrando aceleración para obtener velocidad")
         velocity = self.integrate_acceleration(acceleration, time)
         
         # Integrar velocidad para obtener desplazamiento
+        self.logger.info("Integrando velocidad para obtener desplazamiento")
         displacement = self.integrate_velocity(velocity, time)
+        
+        end_time = time_module.time()
+        self.logger.info(f"Procesamiento completo en {end_time - start_time:.4f} segundos")
         
         return {
             'acceleration': acceleration,
@@ -133,15 +231,39 @@ class SignalProcessor:
             
         Returns:
             dict: Periodos y espectros de respuesta (Sa, Sv, Sd)
+            
+        Raises:
+            ValueError: Si los datos de entrada no son válidos
         """
+        if acceleration is None or len(acceleration) == 0:
+            self.logger.error("Los datos de aceleración son nulos o vacíos")
+            raise ValueError("Los datos de aceleración no pueden ser nulos o vacíos")
+            
+        if time is None or len(time) == 0:
+            self.logger.error("Los datos de tiempo son nulos o vacíos")
+            raise ValueError("Los datos de tiempo no pueden ser nulos o vacíos")
+            
+        if len(acceleration) != len(time):
+            self.logger.error(f"Longitud de aceleración ({len(acceleration)}) y tiempo ({len(time)}) no coinciden")
+            raise ValueError("Los arrays de aceleración y tiempo deben tener la misma longitud")
+        
+        start_time = time_module.time()
+        
         if periods is None:
             periods = np.logspace(-2, 1, 100)  # 0.01s a 10s
+            
+        self.logger.info(f"Calculando espectro de respuesta para {len(periods)} periodos")
             
         dt = time[1] - time[0]
         omega = 2 * np.pi / periods
         Sa = np.zeros_like(periods)
         Sv = np.zeros_like(periods)
         Sd = np.zeros_like(periods)
+        
+        # Usar método de Newmark-Beta para resolver la ecuación diferencial
+        # Parámetros de Newmark-Beta (promedio constante de aceleración)
+        gamma = 0.5
+        beta = 0.25
         
         for i, T in enumerate(periods):
             # Parámetros del sistema de 1GDL
@@ -152,10 +274,6 @@ class SignalProcessor:
             # Resolver ecuación diferencial usando método de Newmark-Beta
             u = np.zeros_like(acceleration)  # Desplazamiento
             v = np.zeros_like(acceleration)  # Velocidad
-            
-            # Parámetros de Newmark-Beta (promedio constante de aceleración)
-            gamma = 0.5
-            beta = 0.25
             
             # Constantes para el método
             a1 = 1 / (beta * dt * dt) + (gamma * c) / (beta * dt)
@@ -175,6 +293,9 @@ class SignalProcessor:
             Sd[i] = np.max(np.abs(u))
             Sv[i] = np.max(np.abs(v))
             Sa[i] = w * w * Sd[i]  # Relación entre Sa y Sd
+        
+        end_time = time_module.time()
+        self.logger.info(f"Cálculo de espectro de respuesta completado en {end_time - start_time:.4f} segundos")
         
         return {
             'periods': periods,
