@@ -3,22 +3,26 @@
 ## Pruebas para el Procesador de Señales
 
 ### Funcionalidades Básicas
+
 1. **test_remove_baseline**: Verifica la corrección de línea base en señales sísmicas.
 2. **test_integrate_acceleration**: Comprueba la integración de aceleración a velocidad.
 3. **test_integrate_velocity**: Valida la integración de velocidad a desplazamiento.
 4. **test_compute_response_spectrum**: Verifica el cálculo del espectro de respuesta.
 
 ### Análisis Espectral
-5. **test_compute_power_spectrum**: Prueba el cálculo del espectro de potencia.
-6. **test_compute_autocorrelation**: Valida el cálculo de la función de autocorrelación.
+
+1. **test_compute_power_spectrum**: Prueba el cálculo del espectro de potencia.
+2. **test_compute_autocorrelation**: Valida el cálculo de la función de autocorrelación.
 
 ### Análisis de Múltiples Componentes
-7. **test_compute_cross_correlation**: Verifica la correlación cruzada entre dos señales.
-8. **test_compute_coherence**: Prueba el cálculo de la función de coherencia.
-9. **test_compute_coherence_with_common_frequency**: Valida la coherencia con señales que comparten frecuencias.
+
+1. **test_compute_cross_correlation**: Verifica la correlación cruzada entre dos señales.
+2. **test_compute_coherence**: Prueba el cálculo de la función de coherencia.
+3. **test_compute_coherence_with_common_frequency**: Valida la coherencia con señales que comparten frecuencias.
 
 ### Manejo de Excepciones
-10. **test_processor_exceptions**: Verifica el manejo de excepciones para entradas inválidas.
+
+1. **test_processor_exceptions**: Verifica el manejo de excepciones para entradas inválidas.
 
 ## Pruebas para el Filtro de Señales
 
